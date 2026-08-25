@@ -1,8 +1,15 @@
 # smarmsynth — reverse-engineering and re-creating SwarmSynth
 
-Anarchy Sound Software's **SwarmSynth** (2003) is a swarm of oscillators that
-move through a parameter space under attraction, repulsion and reflection. It is
-deliberately raw. This repository rebuilds it with modern tools, in three parts:
+> **SwarmSynth is not my work.** It is a synthesiser plugin written in 2003 by
+> [Anarchy Sound Software](http://www.anarchysoundsoftware.co.uk), released as
+> freeware in 2012. The instrument, its sound, its interface and its 45 factory
+> patches are all theirs. This repository is an attempt to work out *how it
+> does what it does* by measuring it, and to rebuild that with modern tools.
+
+**SwarmSynth** is a swarm of oscillators that move through a parameter space
+under attraction, repulsion and reflection. It is deliberately raw, it sounds
+like nothing else, and it is a 32-bit Windows binary with no source code. This
+repository rebuilds it in three parts:
 
 1. **A VST2 host** (`vsthost32.exe`) that runs the 32-bit Windows original under
    Wine — live with audio and MIDI, or headless and deterministic.
