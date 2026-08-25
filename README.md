@@ -105,6 +105,34 @@ the measurements by `analysis/build_spec.py`, so the parameter table, the
 quantisers and the preset offsets cannot drift from what was measured.
 `juce/Source/SwarmPreset.h` loads original SwarmSynth patches.
 
+### The GUI
+
+![original and recreation side by side](analysis/figures/gui-comparison.png)
+
+The editor is laid out in the original's own 680 x 536 units and scaled as a
+whole, so the proportions hold at any window size. `analysis/data/ref_native.png`
+is the reference capture the rectangles in `PluginEditor.cpp` were measured off
+(the plugin's editor is exactly 2.5x on this display, so the capture rescales to
+native without guesswork).
+
+Working parts: the five parameter columns with their home and range knobs, the
+column selector, both envelope editors, the Speed envelope, all the motion and
+filter knobs, the on-screen keyboard, and the 3D swarm view driven by live
+particle positions from the engine.
+
+Two things the original has that this does not yet: the zoom and rotate sliders
+on the 3D panel, and the pitch **fine** control. Pitch coarse and fine are worth
+a note -- they exist in the original's state chunk at `0x1c` and `0x20` but are
+**not** exposed as VST parameters, so that knob is inert here rather than
+pretending to be wired to something.
+
+Building the GUI paid for itself immediately: rendering the envelope panels
+showed the segment durations reading 224 ms where the original says 500 ms,
+which traced back to a real bug in the preset importer. Envelope times are
+stored in the chunk in **seconds**, not as normalised values -- the default
+patch holds 0.1 / 0.5 / 0.2 for controls that read 100 / 500 / 200 ms. Every
+imported patch would have had wrong envelope times.
+
 ### The loop
 
 `swarmrender` is the new engine behind the same command line as

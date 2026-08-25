@@ -1,6 +1,6 @@
 #include "PluginProcessor.h"
-#include "PluginEditor.h"
 #include "SwarmPreset.h"
+#include "SwarmDefaults.h"
 
 using namespace swarm;
 
@@ -15,8 +15,13 @@ juce::String formatValue (const ParamSpec& s, float v)
 {
     switch (s.disp)
     {
-        case Disp::Db:    return v <= 0.0f ? juce::String ("-inf")
-                                           : juce::String (20.0f * std::log10 (v), 2);
+        case Disp::Db:
+        {
+            if (v <= 0.0f) return "-oo";
+            auto t = juce::String (20.0f * std::log10 (v), 2);
+            if (t.contains (".")) t = t.trimCharactersAtEnd ("0").trimCharactersAtEnd (".");
+            return t;
+        }
         case Disp::Pan:   return juce::String ((int) std::trunc (v * 200.0f - 100.0f));
         case Disp::Count: return juce::String (1 + (int) (v * 63.0f));
         case Disp::Ms1k:  return juce::String (1 + (int) (v * 999.0f));
@@ -53,20 +58,14 @@ SwarmAudioProcessor::SwarmAudioProcessor()
     for (int i = 0; i < kNumParams; ++i)
         cached[i] = apvts.getRawParameterValue (kParams[i].id);
 
-    // the original's power-on defaults, read straight off its own chunk
-    auto set = [this] (int i, float v) { if (auto* p = apvts.getParameter (kParams[i].id)) p->setValueNotifyingHost (v); };
-    set (0, 1.00f);  set (1, 0.50f);  set (2, 0.10f);  set (3, 0.10f);
-    set (9, 0.50f);  set (11, 0.50f); set (12, 0.50f); set (13, 0.50f);
-    set (14, 0.50f); set (15, 0.50f); set (16, 1.00f);
-    set (19, 7.0f / 63.0f);            // 8 oscillators
-    set (20, 19.0f / 999.0f);          // 20 ms portamento
-    for (int i = 22; i < kNumParams; ++i)
-    {
-        const auto& s = kParams[i];
-        if (s.disp == Disp::Time) set (i, envTimeNorm (i % 3 == 0 ? 500.0f : 100.0f));
-        else                      set (i, 0.5f);
-    }
-    set (23, 1.0f);   // Vl Atk Lv 100%
+    // the original's power-on defaults (see SwarmDefaults.h)
+    for (int i = 0; i < kNumParams; ++i)
+        if (auto* pr = apvts.getParameter (kParams[i].id))
+        {
+            pr->setValueNotifyingHost (defaultValue (i));
+            if (auto* fp = dynamic_cast<juce::AudioParameterFloat*> (pr))
+                juce::ignoreUnused (fp);
+        }
 }
 
 void SwarmAudioProcessor::prepareToPlay (double sampleRate, int block)
@@ -142,6 +141,9 @@ void SwarmAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     buffer.clear();
     pullSettings();
 
+    // notes played on the editor's keyboard arrive the same way as host MIDI
+    keyboardState.processNextMidiBuffer (midi, 0, buffer.getNumSamples(), true);
+
     int pos = 0;
     const int n = buffer.getNumSamples();
     auto* L = buffer.getWritePointer (0);
@@ -197,11 +199,6 @@ void SwarmAudioProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
         apvts.replaceState (juce::ValueTree::fromXml (*xml));
-}
-
-juce::AudioProcessorEditor* SwarmAudioProcessor::createEditor()
-{
-    return new SwarmAudioProcessorEditor (*this);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

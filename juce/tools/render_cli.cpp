@@ -12,6 +12,7 @@
 #include <vector>
 #include "../Source/SwarmParams.h"
 #include "../Source/SwarmEngine.h"
+#include "../Source/SwarmDefaults.h"
 
 using namespace swarm;
 
@@ -19,18 +20,7 @@ static float gParam[kNumParams];
 
 static void setDefaults()
 {
-    for (int i = 0; i < kNumParams; ++i) gParam[i] = 0.0f;
-    gParam[0]  = 1.00f;  gParam[1] = 0.50f;  gParam[2] = 0.10f;  gParam[3] = 0.10f;
-    gParam[9]  = 0.50f;  gParam[11] = 0.50f; gParam[12] = 0.50f; gParam[13] = 0.50f;
-    gParam[14] = 0.50f;  gParam[15] = 0.50f; gParam[16] = 1.00f;
-    gParam[19] = 7.0f / 63.0f;
-    gParam[20] = 19.0f / 999.0f;
-    gParam[21] = 12346.0f / 134217728.0f;
-    for (int i = 22; i < kNumParams; ++i)
-        gParam[i] = (kParams[i].disp == Disp::Time) ? envTimeNorm (500.0f) : 0.5f;
-    gParam[22] = envTimeNorm (100.0f); gParam[23] = 1.0f;
-    gParam[24] = envTimeNorm (500.0f); gParam[25] = 0.5f;
-    gParam[26] = envTimeNorm (200.0f);
+    for (int i = 0; i < kNumParams; ++i) gParam[i] = defaultValue (i);
 }
 
 static SwarmSettings buildSettings()

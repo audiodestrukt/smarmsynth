@@ -34,6 +34,10 @@ public:
     /** Loads an original SwarmSynth patch (raw chunk or .fxp). */
     bool loadOriginalPreset (const juce::File&);
 
+    /** The editor's 3D view reads particle positions straight off the engine. */
+    const swarm::SwarmEngine& getEngine() const { return engine; }
+    juce::MidiKeyboardState&  getKeyboardState()  { return keyboardState; }
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:
@@ -44,6 +48,7 @@ private:
 
     std::atomic<float>* cached[swarm::kNumParams] = { nullptr };
     swarm::SwarmEngine  engine;
+    juce::MidiKeyboardState keyboardState;
     int   heldNote = -1;
     double sr = 44100.0;
 

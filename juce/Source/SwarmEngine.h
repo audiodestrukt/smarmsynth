@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <vector>
 #include <algorithm>
+#include <atomic>
 
 namespace swarm {
 
@@ -139,6 +140,14 @@ struct Particle {
     float phase = 0.0f;                       // 0..1 over one f0 period
 };
 
+/** One particle as the editor sees it: absolute dimension values, plus the
+    velocity it is carrying so the view can draw motion streaks the way the
+    original's display does. */
+struct ParticleView {
+    float value[NumDims] = { 0, 0, 0, 0, 0 };   // vol/pitch/pan/res/noise, 0..1
+    float vel[NumDims]   = { 0, 0, 0, 0, 0 };
+};
+
 class SwarmEngine {
 public:
     void prepare (double sampleRate, int /*maxBlock*/)
@@ -187,6 +196,17 @@ public:
     }
 
     bool isActive() const { return envs[EVol].isActive(); }
+
+    /** Copies the latest particle state for the editor. Returns how many. */
+    int getParticles (ParticleView* dst, int maxCount) const
+    {
+        const int r = viewIndex.load (std::memory_order_acquire);
+        const int n = std::min (viewCount.load (std::memory_order_relaxed), maxCount);
+        for (int i = 0; i < n; ++i) dst[i] = viewBuf[r][i];
+        return n;
+    }
+
+    bool isSounding() const { return envs[EVol].isActive(); }
 
     void process (float* outL, float* outR, int numSamples)
     {
@@ -323,6 +343,28 @@ private:
                 p.pos[k] = std::clamp (p.pos[k], -1.0f, 1.0f);
             }
         }
+        publishSnapshot();
+    }
+
+    // Double-buffered so the editor can read while audio writes. A torn read
+    // would only ever cost one frame of one dot, so no lock is warranted.
+    void publishSnapshot()
+    {
+        const int w = 1 - viewIndex.load (std::memory_order_relaxed);
+        auto& dst = viewBuf[w];
+        for (int i = 0; i < cfg.numParticles; ++i)
+        {
+            for (int k = 0; k < NumDims; ++k)
+            {
+                const float centre = (k == DPan) ? (cfg.home[DPan] * 0.5f + 0.5f)
+                                   : (k == DPitch) ? 0.5f : cfg.home[k];
+                dst[i].value[k] = std::clamp (centre + cfg.range[k] * particles[i].pos[k] * 0.5f,
+                                              0.0f, 1.0f);
+                dst[i].vel[k] = particles[i].vel[k];
+            }
+        }
+        viewCount.store (cfg.numParticles, std::memory_order_relaxed);
+        viewIndex.store (w, std::memory_order_release);
     }
 
     void filterStereo (float& l, float& r)
@@ -346,6 +388,9 @@ private:
 
     SwarmSettings cfg;
     Particle particles[kMaxParticles];
+    ParticleView viewBuf[2][kMaxParticles];
+    mutable std::atomic<int> viewIndex { 0 };
+    mutable std::atomic<int> viewCount { 0 };
     Env      envs[NumEnvs];
     Rng      rng;
     double   srate = 44100.0;

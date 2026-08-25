@@ -45,7 +45,14 @@ namespace detail {
 inline float denormalise (const ParamSpec& s, const uint8_t* chunk)
 {
     if (s.chunkOffset < 0) return 0.0f;
-    if (s.chunkIsFloat) return detail::rdF32 (chunk, s.chunkOffset);
+    if (s.chunkIsFloat)
+    {
+        const float raw = detail::rdF32 (chunk, s.chunkOffset);
+        // Envelope times are stored in SECONDS, not as normalised values: the
+        // default patch holds 0.1 / 0.5 / 0.2 where the parameters read
+        // 100 / 500 / 200 ms. Everything else is stored normalised already.
+        return s.disp == Disp::Time ? envTimeNorm (raw * 1000.0f) : raw;
+    }
 
     const float n = (float) detail::rdI32 (chunk, s.chunkOffset);
     switch (s.quant)

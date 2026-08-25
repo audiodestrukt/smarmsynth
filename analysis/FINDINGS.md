@@ -113,6 +113,12 @@ Full offset table: `analysis/data/chunk_map.json`. The envelope record is 108
 bytes but only 7–8 fields are exposed as VST parameters, so the GUI's envelope
 editor has breakpoint freedom the parameter list does not.
 
+One trap: **envelope times are stored in seconds**, not as normalised parameter
+values. The default patch holds 0.1 / 0.5 / 0.2 in the slots whose parameters
+read 100 / 500 / 200 ms. Levels are stored normalised. This was caught by
+drawing the envelope panels in the recreated GUI and noticing they disagreed
+with the original's own readout.
+
 This is enough to **load original patches into the recreation**, which
 `juce/Source/SwarmPreset.h` does.
 
