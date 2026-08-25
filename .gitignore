@@ -4,6 +4,12 @@ SwarmSynth.dll
 SwarmSynth32.dll
 *.dll
 
+# The 45 factory patches are the original author's work. Extract them from your
+# own copy of the plugin with analysis/extract_presets.sh; they are not
+# distributed here.
+presets/
+*.swarmpatch
+
 # Raw state chunks dumped out of the original plugin: its data, not ours.
 *.chunk
 
@@ -15,6 +21,15 @@ juce/build/
 # measurement caches (regenerate with the scripts in analysis/)
 analysis/data/renders/
 analysis/data/ab/
+analysis/data/anarchy_survey/
+analysis/data/preset_ab/
+analysis/data/menu*/
+analysis/data/opt*/
+analysis/data/p4*/
+analysis/data/kb*/
+analysis/data/anarchy*/
+analysis/data/presetmenu/
+*.wav
 analysis/data/frames/
 analysis/data/chunks/
 analysis/data/sw/

@@ -150,6 +150,77 @@ Deleting a point folds its duration into the neighbouring segment, so the
 envelope keeps its overall length. Adding one splits the segment it landed in,
 again preserving total length.
 
+## The factory patches
+
+The original ships **45 factory patches**, and they are not files: they live
+inside the plugin's own resources (`.rsrc` is 3.2 MB of a 3.6 MB DLL). The
+Presets menu lists them:
+
+```
+Brass, Buzz Mania, Cheeky, Chewbacca, Clarinet, Cosmic Kazoo Piano, Crazy Saw,
+Crunchy, Digi Tamba, Dischord, Drunk Pixies, Enola, Filth Bass, Firework,
+Freaky Note, Funky Slap, Gentle Gong, Ghostly Wail, Growing Bass, Harpsichord,
+Heroic Horn, High And Dangerous, Juicy Plastic, Kick Bass, Large Pad, Mad Pad,
+Metallic Thwack, Mulling Horn, Passing Gust, Pizzicato, Possessed Organ,
+Power Bass, Resonant Rip, Rhythmic, Saxophone, Shreek, Siren, Soft Organ,
+Spooky Organ, Squelchy, String Pad, Thunderclap, Tuned Perc, Vowel Swarm,
+Wobble Bass
+```
+
+`analysis/extract_presets.sh` walks that menu, loads each entry and dumps the
+resulting state chunk, giving a `.swarmpatch` file per patch that both the
+original and the recreation can load. It keys on the name inside each chunk
+rather than the menu index, because Wine reports menu item rects with a
+consistent vertical offset -- clicking "index 43" actually selects the entry
+five rows up.
+
+These patches are the original author's work, so they are **not** distributed
+with this project. Extract them from your own copy of the plugin.
+
+Having them turns the A/B into a real benchmark: `analysis/preset_ab.py`
+renders every factory patch through both engines and scores them, which is a
+far more honest measure than one-parameter synthetic cases.
+
+**Where the recreation stands on real patches** (median absolute log-spectrum
+difference, note 48):
+
+```
+median 20.8 dB    best 6.6 (Dischord)    worst 99.6 (Pizzicato)
+```
+
+The best nine are all under 9 dB -- Dischord, Metallic Thwack, Wobble Bass,
+High And Dangerous, Shreek, Mad Pad, Growing Bass, Mulling Horn, Freaky Note.
+The worst are Pizzicato, Cheeky, Digi Tamba and Brass, all around 80-100 dB;
+they are the plucked and brassy ones, which points at the attack transient and
+the high-resonance grain rather than the swarm.
+
+Two things worth recording from the peak column:
+
+- **The original clips.** It hits exactly 1.000 on 18 of the 45 factory
+  patches. Full-scale output is normal for this synth, not a fault, which also
+  means the recreation's randomiser reaching full scale is not unfaithful.
+- Levels diverge in both directions, so the gap is not a single missing gain
+  stage.
+
+### What the factory patches use
+
+Across all 45, in normalised units:
+
+| parameter | p10 | p50 | p90 |
+|---|---|---|---|
+| Volume | 0.68 | **1.00** | 1.00 |
+| Resonance | 0.00 | **0.07** | 0.52 |
+| Pan Var. | 0.33 | **1.00** | 1.00 |
+| Res Var. | 0.50 | **1.00** | 1.00 |
+| Std. Dev. | 0.00 | **0.04** | 0.50 |
+| Oscillators | 0.06 | **0.11** (about 8) | 0.22 |
+| Portamento | 0.00 | **0.02** (about 20 ms) | 0.08 |
+
+Real patches are particular: Pan Var and Res Var pinned near maximum, Resonance
+and Std. Dev. near zero, Volume at full, Portamento barely moving. That is the
+house style, and the Anarchy randomiser now samples from it rather than
+uniformly over the space (`analysis/preset_stats.py`).
+
 ## The Anarchy button
 
 It lives under **Options -> `<anarchy button>`** -- that is the literal menu

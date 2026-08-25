@@ -246,6 +246,14 @@ bool SwarmAudioProcessor::loadOriginalPreset (const juce::File& f)
     for (int i = 0; i < kNumParams; ++i)
         if (auto* p = apvts.getParameter (kParams[i].id))
             p->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, preset.value[i]));
+
+    // an imported patch replaces any breakpoints the editor had added
+    for (int e = 0; e < NumEnvs; ++e) setEnvPoints (e, {});
+
+    apvts.state.setProperty ("patchName",
+                             preset.name.empty() ? f.getFileNameWithoutExtension().replaceCharacter ('_', ' ')
+                                                 : juce::String (preset.name),
+                             nullptr);
     return true;
 }
 

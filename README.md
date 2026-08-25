@@ -178,6 +178,31 @@ MIDI inputs are enabled in the same dialog and persist the same way.
 `SWARM_DEBUG=1` makes the plugin print the rate and buffer it was actually
 given, plus envelope edits -- which is how the 8000 Hz default was found.
 
+### Patches
+
+The original's 45 factory patches live inside its own resources rather than as
+files. Pull them out of your own copy of the plugin:
+
+```sh
+analysis/extract_presets.sh          # -> presets/original/*.swarmpatch
+python3 analysis/preset_ab.py        # score the recreation on all of them
+```
+
+The recreation's **Presets** button then lists whatever it finds, in
+`$SWARM_PRESETS`, a `presets/` directory next to the binary, or under your
+application-data and documents directories. They are the original author's work
+and are not distributed here.
+
+The same patches double as the DSP benchmark. Synthetic one-parameter tests
+only go so far; 45 real patches are what the synth actually sounds like.
+Current standing: **median 20.8 dB, best 6.6 (Dischord), worst 99.6
+(Pizzicato)**. The plucked and brassy patches are the worst, which points at the
+attack transient rather than the swarm.
+
+`analysis/preset_stats.py` reports what the factory patches actually use, and
+the Anarchy randomiser now samples from that distribution instead of uniformly
+over the parameter space.
+
 ### The Anarchy button
 
 The original hides a patch randomiser under Options -> `<anarchy button>`. The

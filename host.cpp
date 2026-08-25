@@ -544,6 +544,19 @@ static uint32_t be32(const unsigned char* p) {
     return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
 }
 
+// Loads a raw state chunk (what --dump-chunk writes) straight into the plugin.
+static bool loadRawChunk(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) { printf("!! cannot open %s\n", path); return false; }
+    fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET);
+    std::vector<unsigned char> d((size_t)sz);
+    if (sz <= 0 || fread(&d[0], 1, (size_t)sz, f) != (size_t)sz) { fclose(f); return false; }
+    fclose(f);
+    dispatch(effSetChunk, 1 /*isPreset*/, (VstIntPtr)sz, &d[0]);
+    printf("   loaded chunk %s (%ld bytes)\n", path, sz);
+    return true;
+}
+
 static bool loadFxp(const char* path) {
     FILE* f = fopen(path, "rb");
     if (!f) { printf("!! cannot open %s\n", path); return false; }
@@ -1062,6 +1075,7 @@ static void usage() {
     "  --no-midi              do not open any MIDI input\n"
     "  --program <n>          select program n\n"
     "  --fxp <file>           load an .fxp/.fxb preset before playing/rendering\n"
+    "  --chunk <file>         load a raw state chunk (as --dump-chunk writes)\n"
     "  --param <i>=<v>        set parameter i to v (0..1), repeatable\n"
     "  --sr <hz>              sample rate (default 44100)\n"
     "  --block <n>            block size in frames (default 512)\n"
@@ -1082,6 +1096,7 @@ int main(int argc, char** argv) {
     bool doInfo = false, doListMidi = false, noMidi = false;
     int  midiDev = -1, program = -1;
     const char* fxp = NULL;
+    const char* rawChunk = NULL;
     const char* chunkOut = NULL; bool chunkIsPreset = true;
     int mapSteps = 0;
     RenderOpts ro;
@@ -1104,6 +1119,7 @@ int main(int argc, char** argv) {
         else if (a == "--dump-bank"  && nx) { chunkOut = argv[++i]; chunkIsPreset = false; }
         else if (a == "--program" && nx) program = atoi(argv[++i]);
         else if (a == "--fxp"     && nx) fxp = argv[++i];
+        else if (a == "--chunk"   && nx) rawChunk = argv[++i];
         else if (a == "--sr"      && nx) g_sampleRate = atof(argv[++i]);
         else if (a == "--block"   && nx) g_blockSize = atoi(argv[++i]);
         else if (a == "--buffers" && nx) g_numBuffers = atoi(argv[++i]);
@@ -1139,6 +1155,7 @@ int main(int argc, char** argv) {
     startPlugin();
 
     if (fxp) loadFxp(fxp);
+    if (rawChunk) loadRawChunk(rawChunk);
     if (program >= 0) { dispatch(effSetProgram, 0, program); printf("   program %d\n", program); }
     for (size_t i = 0; i < paramSets.size(); i++) {
         plugLock();

@@ -24,6 +24,8 @@ private:
     void selectDimension (int d);
     void layoutInBaseUnits();
     void updatePatchName();
+    void showPresetMenu();
+    void loadPreset (const juce::File&);
 
     SwarmAudioProcessor& proc;
 

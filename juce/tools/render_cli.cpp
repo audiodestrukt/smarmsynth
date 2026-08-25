@@ -14,6 +14,8 @@
 #include "../Source/SwarmEngine.h"
 #include "../Source/SwarmDefaults.h"
 #include "../Source/SwarmAnarchy.h"
+#include "../Source/SwarmPreset.h"
+#include <fstream>
 
 using namespace swarm;
 
@@ -76,7 +78,7 @@ int main (int argc, char** argv)
 {
     if (argc < 2) { printf ("usage: swarmrender out.wav [--note n] [--vel v] [--len s]"
                             " [--tail s] [--sr hz] [--param i=v]...\n"
-                            "                   [--anarchy seed]\n"); return 1; }
+                            "                   [--anarchy seed] [--preset file]\n"); return 1; }
     setDefaults();
     const char* out = argv[1];
     int note = 60, vel = 100, sr = 44100, block = 512;
@@ -93,6 +95,16 @@ int main (int argc, char** argv)
         else if (a == "--tail"  && has) tail = atof (argv[++i]);
         else if (a == "--sr"    && has) sr   = atoi (argv[++i]);
         else if (a == "--block" && has) block = atoi (argv[++i]);
+        else if (a == "--preset" && has)
+        {
+            std::ifstream in (argv[++i], std::ios::binary);
+            std::vector<uint8_t> bytes ((std::istreambuf_iterator<char> (in)),
+                                         std::istreambuf_iterator<char>());
+            const auto pr = parseFile (bytes);
+            if (! pr.ok) { printf ("!! not a SwarmSynth patch: %s\n", argv[i]); return 1; }
+            for (int k = 0; k < kNumParams; ++k) gParam[k] = pr.value[k];
+            printf ("   patch \"%s\"\n", pr.name.c_str());
+        }
         else if (a == "--anarchy" && has) anarchy (gParam, (uint32_t) strtoul (argv[++i], nullptr, 10));
         else if (a == "--param" && has)
         {

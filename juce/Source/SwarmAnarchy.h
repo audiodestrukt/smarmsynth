@@ -46,32 +46,42 @@ inline void anarchy (float* v, uint32_t seed)
 {
     AnarchyRng r (seed);
 
-    // --- the five per-particle dimensions ---------------------------------
-    v[0]  = r.range (0.60f, 0.92f);        // Volume: audible without pinning the output
-    v[1]  = r.range (0.35f, 0.65f);        // Pan: near centre, the swarm spreads it
-    v[2]  = r.range (0.00f, 0.85f);        // Resonance: the timbre control
-    v[3]  = r.low   (0.00f, 0.60f, 2);     // Noise: a little goes a long way
+    // The ranges below follow the distribution the original's own 45 factory
+    // patches occupy (analysis/preset_stats.py), rather than being spread
+    // evenly over the space. Real patches turn out to be quite particular:
+    // Pan Var and Res Var are pinned near maximum, Resonance and Std. Dev. sit
+    // near zero, Volume runs at full, and Portamento barely moves.
 
-    // variance is the whole point of the instrument, so be generous
-    for (int i = 4; i <= 8; ++i) v[i] = r.low (0.0f, 0.85f, 2);
-    if (r.chance (0.7f)) v[5] = r.range (0.05f, 0.45f);   // keep pitch spread musical
+    // --- the five per-particle dimensions ---------------------------------
+    v[0]  = 1.0f - r.low (0.0f, 0.32f, 2);   // Volume: p50 1.00, p10 0.68
+    v[1]  = r.range (0.46f, 0.56f);          // Pan: real patches stay centred
+    v[2]  = r.low   (0.0f, 0.85f, 3);        // Resonance: p50 0.07, long tail
+    v[3]  = r.low   (0.0f, 0.95f, 2);        // Noise: p50 0.14, long tail
+
+    // the spread controls are what make it a swarm, and the factory patches
+    // lean on them hard
+    v[4]  = r.range (0.0f,  1.0f);           // Vol Var:   p50 0.68, wide
+    v[5]  = r.low   (0.0f,  1.0f, 2);        // Pitch Var: p50 0.15, long tail
+    v[6]  = 1.0f - r.low (0.0f, 0.67f, 2);   // Pan Var:   p50 1.00
+    v[7]  = 1.0f - r.low (0.0f, 0.50f, 2);   // Res Var:   p50 1.00
+    v[8]  = r.range (0.0f,  1.0f);           // Noise Var: p50 0.66, wide
 
     // --- the flocking model ------------------------------------------------
-    v[9]  = r.range (0.10f, 0.90f);        // Speed
-    v[10] = r.chance (0.5f) ? r.range (0.0f, 0.7f) : 0.0f;   // Speed LFO
-    v[11] = r.range (0.0f, 1.0f);          // Std. Dev.
-    v[12] = r.range (0.2f, 1.0f);          // Reflection
-    v[13] = r.range (0.0f, 1.0f);          // Attract
-    v[14] = r.range (0.0f, 1.0f);          // Repel
-    v[15] = r.range (0.1f, 1.0f);          // Proximity
+    v[9]  = r.range (0.20f, 1.00f);          // Speed:      p50 0.46
+    v[10] = r.chance (0.30f) ? r.range (0.1f, 1.0f) : 0.0f;   // Speed LFO: usually off
+    v[11] = r.low   (0.0f, 0.63f, 2);        // Std. Dev.:  p50 0.04, max 0.63
+    v[12] = r.range (0.0f, 1.0f);            // Reflection: p50 0.42
+    v[13] = r.range (0.1f, 1.0f);            // Attract:    p50 0.50
+    v[14] = r.range (0.1f, 1.0f);            // Repel:      p50 0.50
+    v[15] = r.low   (0.05f, 1.0f, 2);        // Proximity:  p50 0.25
 
     // --- global ------------------------------------------------------------
-    v[16] = r.range (0.45f, 1.00f);        // Lowpass: leave the top open-ish
-    v[17] = r.low   (0.00f, 0.80f, 2);     // Q
-    v[18] = r.chance (0.35f) ? r.range (0.0f, 0.6f) : 0.0f;  // Overdrive
-    v[19] = r.range (0.05f, 0.55f);        // Oscillators: roughly 4..36
-    v[20] = r.low   (0.0f, 0.35f, 2);      // Portamento
-    v[21] = r.uni();                       // Seed
+    v[16] = r.range (0.50f, 1.00f);          // Lowpass: never fully shut
+    v[17] = r.chance (0.30f) ? r.range (0.1f, 1.0f) : 0.0f;   // Q: usually off
+    v[18] = r.chance (0.45f) ? r.range (0.1f, 1.0f) : 0.0f;   // Overdrive
+    v[19] = r.low   (0.03f, 0.45f, 2);       // Oscillators: p50 0.11, about 8
+    v[20] = r.low   (0.0f, 0.10f, 2);        // Portamento: p50 0.02, about 20 ms
+    v[21] = r.uni();                         // Seed
 
     // --- envelopes ----------------------------------------------------------
     // Times lean short; levels are free. A block is

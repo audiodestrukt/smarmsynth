@@ -1,4 +1,7 @@
 #include "PluginEditor.h"
+#include "SwarmPresetLibrary.h"
+#include <cstdio>
+#include <cstdlib>
 
 using namespace swarmui;
 
@@ -127,21 +130,7 @@ SwarmAudioProcessorEditor::SwarmAudioProcessorEditor (SwarmAudioProcessor& p)
     addAndMakeVisible (patchNameLabel);
     updatePatchName();
 
-    presetsButton.onClick = [this]
-    {
-        chooser = std::make_unique<juce::FileChooser> ("Original SwarmSynth patch",
-                                                       juce::File(), "*.fxp;*.fxb;*.chunk;*");
-        chooser->launchAsync (juce::FileBrowserComponent::openMode
-                            | juce::FileBrowserComponent::canSelectFiles,
-                              [this] (const juce::FileChooser& fc)
-        {
-            const auto f = fc.getResult();
-            if (f.existsAsFile() && ! proc.loadOriginalPreset (f))
-                juce::NativeMessageBox::showMessageBoxAsync (
-                    juce::MessageBoxIconType::WarningIcon, "SwarmSynth",
-                    "Not a SwarmSynth patch chunk.");
-        });
-    };
+    presetsButton.onClick = [this] { showPresetMenu(); };
 
     keyboard = std::make_unique<juce::MidiKeyboardComponent> (
                    proc.getKeyboardState(), juce::MidiKeyboardComponent::horizontalKeyboard);
@@ -156,6 +145,18 @@ SwarmAudioProcessorEditor::SwarmAudioProcessorEditor (SwarmAudioProcessor& p)
     setSize (kBaseW * 2, kBaseH * 2);
     selectDimension (0);
     startTimerHz (20);
+
+    if (std::getenv ("SWARM_DEBUG") != nullptr)
+    {
+        const auto found = swarm::findPresets();
+        std::printf ("[presets] %d found\n", found.size());
+        for (int i = 0; i < juce::jmin (4, found.size()); ++i)
+            std::printf ("[presets]   %s\n", swarm::prettyPresetName (found[i]).toRawUTF8());
+        for (const auto& d : swarm::presetSearchPaths())
+            std::printf ("[presets] search: %s%s\n", d.getFullPathName().toRawUTF8(),
+                         d.isDirectory() ? "" : "  (missing)");
+        std::fflush (stdout);
+    }
 }
 
 SwarmAudioProcessorEditor::~SwarmAudioProcessorEditor() = default;
@@ -200,6 +201,75 @@ void SwarmAudioProcessorEditor::selectDimension (int d)
     }
     layoutInBaseUnits();
     repaint();
+}
+
+void SwarmAudioProcessorEditor::showPresetMenu()
+{
+    const auto files = swarm::findPresets();
+
+    juce::PopupMenu m;
+    if (files.isEmpty())
+    {
+        m.addSectionHeader ("No patches found");
+        m.addItem (-2, "Where does it look?...", true, false);
+    }
+    else
+    {
+        for (int i = 0; i < files.size(); ++i)
+            m.addItem (i + 1, swarm::prettyPresetName (files[i]));
+    }
+    m.addSeparator();
+    m.addItem (-1, "Import patch file...");
+
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (presetsButton),
+                     [this, files] (int choice)
+    {
+        if (choice == 0) return;
+
+        if (choice == -2)
+        {
+            juce::String where = "Patches are looked for in:\n\n";
+            for (const auto& d : swarm::presetSearchPaths())
+                where += "  " + d.getFullPathName() + "\n";
+            where += "\nThe original's 45 factory patches live inside its own "
+                     "resources, not as files. analysis/extract_presets.sh pulls "
+                     "them out of a copy of SwarmSynth.dll.";
+            juce::NativeMessageBox::showMessageBoxAsync (
+                juce::MessageBoxIconType::InfoIcon, "SwarmSynth patches", where);
+            return;
+        }
+
+        if (choice == -1)
+        {
+            chooser = std::make_unique<juce::FileChooser> ("SwarmSynth patch",
+                                                           juce::File(), "*.swarmpatch;*.fxp;*.fxb;*.chunk;*");
+            chooser->launchAsync (juce::FileBrowserComponent::openMode
+                                | juce::FileBrowserComponent::canSelectFiles,
+                                  [this] (const juce::FileChooser& fc)
+            {
+                const auto f = fc.getResult();
+                if (f.existsAsFile()) loadPreset (f);
+            });
+            return;
+        }
+
+        if (juce::isPositiveAndBelow (choice - 1, files.size()))
+            loadPreset (files[choice - 1]);
+    });
+}
+
+void SwarmAudioProcessorEditor::loadPreset (const juce::File& f)
+{
+    if (! proc.loadOriginalPreset (f))
+    {
+        juce::NativeMessageBox::showMessageBoxAsync (
+            juce::MessageBoxIconType::WarningIcon, "SwarmSynth",
+            f.getFileName() + " is not a SwarmSynth patch chunk.");
+        return;
+    }
+    for (int d = 0; d < 5; ++d) { homeKnobs[d]->repaint(); rangeKnobs[d]->repaint(); }
+    selectDimension (selectedDim);
+    updatePatchName();
 }
 
 void SwarmAudioProcessorEditor::updatePatchName()
