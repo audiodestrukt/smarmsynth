@@ -6,10 +6,10 @@
 > patches are all theirs. This repository is an attempt to work out *how it
 > does what it does* by measuring it, and to rebuild that with modern tools.
 
-**SwarmSynth** is a swarm of oscillators that move through a parameter space
-under attraction, repulsion and reflection. It is deliberately raw, it sounds
-like nothing else, and it is a 32-bit Windows binary with no source code. This
-repository rebuilds it in three parts:
+SwarmSynth is a swarm of oscillators that move around a parameter space,
+attracting and repelling each other and bouncing off the walls. The sound is
+rough and unstable in a way I have not heard from anything else. It only exists
+as a 32-bit Windows DLL, and there is no source. This repo is three things:
 
 1. **A VST2 host** (`vsthost32.exe`) that runs the 32-bit Windows original under
    Wine — live with audio and MIDI, or headless and deterministic.
@@ -286,16 +286,15 @@ headless, so a recreation can be A/B'd against the original per patch, per note.
 
 ## How this was made
 
-Written with [Claude Code](https://claude.com/claude-code) running **Claude
-Opus 5**, in a single long session: the host, the measurement scripts, the JUCE
-recreation, the WebAssembly build, and the findings write-up.
+I built this with Claude Code (Opus 5). I ran the original and the recreation
+side by side, said what was wrong, and remembered things about the plugin it
+could not have known (the Anarchy button, the per-note randomisation, the
+internal clipping). It wrote the host, the analysis scripts, the JUCE code and
+the web build.
 
-That is worth stating plainly given what the project claims. The method here is
-measurement — every law in [FINDINGS.md](analysis/FINDINGS.md) is a fit with a
-residual attached, and the parts that are still guesses are labelled as guesses.
-Those measurements were taken by scripts in this repository, against the real
-plugin, and anyone can re-run them. The claims rest on the numbers, not on who
-or what typed them.
+The measurements in [FINDINGS.md](analysis/FINDINGS.md) are made by scripts in
+this repo against the real plugin. If you have a copy of SwarmSynth.dll you can
+rerun all of them.
 
 ## Files
 
