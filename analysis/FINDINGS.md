@@ -224,6 +224,40 @@ and Std. Dev. near zero, Volume at full, Portamento barely moving. That is the
 house style, and the Anarchy randomiser now samples from it rather than
 uniformly over the space (`analysis/preset_stats.py`).
 
+## Particle colour: HSL, not HSV
+
+The two keys above the cube say Res is colour-coded as a rainbow and Noise as a
+greyscale. `analysis/colour_probe.py` pins the actual mapping down by holding
+one dimension fixed with its variance at zero — so every particle shares a
+value — capturing the view and reading the colour back:
+
+| Res % | hue | | Noise % | HSL lightness |
+|---|---|---|---|---|
+| 0 | 0.00 | | 0 | 0.21 |
+| 25 | 0.202 | | 25 | 0.37 |
+| 50 | 0.398 | | 50 | 0.53 |
+| 75 | 0.595 | | 75 | 0.67 |
+| 100 | 0.794 | | 100 | 0.81 |
+
+Both linear:
+
+```
+hue       = 0.79 * Res
+lightness = 0.21 + 0.60 * Noise      saturation stays at full
+```
+
+The important part is that this is **HSL, not HSV**. At Noise 0 a particle is a
+*dark* version of its hue, and Noise blends it toward white — which is exactly
+what the black-to-white Noise key is showing. An HSV reading (drop saturation
+as Noise rises) reproduces the wash-out at the top of the range but misses the
+darkening at the bottom entirely, and that difference is visible.
+
+Worth noting how this was caught: the first run of the probe returned two
+values repeating and 53,000 "particle" pixels. It had screenshotted the
+*recreation* — a leftover standalone matched the same `SwarmSynth` window name.
+The host's window is now titled `SwarmSynth - vsthost32` so the two can never be
+confused again.
+
 ## The Anarchy button
 
 It lives under **Options -> `<anarchy button>`** -- that is the literal menu

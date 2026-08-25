@@ -19,7 +19,7 @@ PY
 
 WINEDEBUG=-all wine ./vsthost32.exe SwarmSynth.dll "$@" >"$OUT/host.log" 2>&1 &
 HOSTPID=$!
-for i in $(seq 40); do WID=$(xdotool search --name '^SwarmSynth$' 2>/dev/null | head -1); [ -n "${WID:-}" ] && break; sleep 0.25; done
+for i in $(seq 40); do WID=$(xdotool search --name 'SwarmSynth - vsthost32' 2>/dev/null | head -1); [ -n "${WID:-}" ] && break; sleep 0.25; done
 [ -z "${WID:-}" ] && { echo "no window"; kill $HOSTPID 2>/dev/null; exit 1; }
 sleep 1.5
 

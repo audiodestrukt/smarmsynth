@@ -322,8 +322,10 @@ void SwarmAudioProcessorEditor::paint (juce::Graphics& g)
         for (float x = 0; x < r.getWidth(); ++x)
         {
             const float t = x / juce::jmax (1.0f, r.getWidth() - 1.0f);
-            g.setColour (rainbow ? juce::Colour::fromHSV (0.83f * t, 1.0f, 1.0f, 1.0f)
-                                 : juce::Colour::greyLevel (t));
+            // the same laws the particles use, so the keys mean what they show:
+            // Res across the hue circle, Noise as lightness from dark to white
+            g.setColour (rainbow ? juce::Colour::fromHSL (0.79f * t, 1.0f, 0.5f, 1.0f)
+                                 : juce::Colour::fromHSL (0.0f, 0.0f, 0.21f + 0.60f * t, 1.0f));
             g.drawLine (r.getX() + x, r.getY(), r.getX() + x, r.getBottom(), 1.0f);
         }
         g.setColour (juce::Colours::black.withAlpha (0.6f));

@@ -6,7 +6,7 @@ OUT=analysis/data/click; rm -rf $OUT; mkdir -p $OUT
 CX="${CX:-150}"; CY="${CY:-260}"
 WINEDEBUG=-all wine ./vsthost32.exe SwarmSynth.dll --no-midi "$@" >$OUT/host.log 2>&1 &
 HP=$!
-for i in $(seq 40); do WID=$(xdotool search --name '^SwarmSynth$' 2>/dev/null|head -1); [ -n "${WID:-}" ] && break; sleep .25; done
+for i in $(seq 40); do WID=$(xdotool search --name 'SwarmSynth - vsthost32' 2>/dev/null|head -1); [ -n "${WID:-}" ] && break; sleep .25; done
 [ -z "${WID:-}" ] && { echo "no window"; kill $HP; exit 1; }
 sleep 2
 eval $(xdotool getwindowgeometry --shell $WID)

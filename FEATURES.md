@@ -62,6 +62,25 @@ The axis assignment itself is believed right — Pitch vertical, Pan across, Vol
 into the screen, with Res as hue and Noise desaturating — since that came from
 reading the original's own axis labels and colour keys.
 
+### Run it in a browser
+
+The engine is header-only C++ with no JUCE anywhere in the DSP —
+`SwarmEngine.h`, `SwarmParams.h`, `SwarmEnvModel.h`, `SwarmAnarchy.h` and
+`SwarmPreset.h` only use the standard library, which `swarmrender` already
+proves by building with plain `g++`. Confirmed: it compiles under Emscripten
+unchanged, first try.
+
+So a browser version is mostly plumbing rather than a port:
+
+- Emscripten the engine to WASM.
+- An `AudioWorkletProcessor` calling `process()`.
+- A canvas for the swarm view — the current view is a faked projection anyway,
+  so 2D canvas is enough and nothing is lost.
+- The `.swarmpatch` files are static assets the same parser reads.
+
+Would make the write-up land much harder: read how it was reverse-engineered,
+then play the thing in the same page.
+
 ## Open questions
 
 Carried over from the reverse-engineering work; see `analysis/FINDINGS.md` for
@@ -77,6 +96,13 @@ detail.
   the loose thread most likely to explain the rest.
 - **The formant ceiling.** At high Resonance and high notes the formant clamps
   around 3.5–4 kHz instead of following `f0 * (1 + 46·Res³)`. Not characterised.
+- **Scroll wheel on the visualiser.** The original does something with the
+  scroll wheel over the 3D view, and the mouse cursor changes colour with it.
+  Unexplored. The colour-changing cursor suggests it is selecting *something*
+  and showing you what — plausibly which dimension the view is colouring by, or
+  which one the wheel is about to adjust. The two unimplemented sliders on that
+  panel and the Options → Visualisation entry are probably part of the same
+  feature; worth looking at all three together rather than separately.
 
 ## Smaller things
 

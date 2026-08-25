@@ -397,9 +397,17 @@ public:
             const float x = plane.getX() + plane.getWidth() * juce::jlimit (0.0f, 1.0f, pan);
             const float y = plane.getBottom() - plane.getHeight() * juce::jlimit (0.0f, 1.0f, pitch);
 
-            // Res picks the hue across the rainbow key; Noise washes it out.
-            juce::Colour c = juce::Colour::fromHSV (juce::jlimit (0.0f, 0.83f, 0.83f * res),
-                                                    1.0f - noise * 0.75f, 1.0f, 1.0f);
+            // MEASURED (analysis/colour_probe.py): the original works in HSL,
+            // not HSV. Res drives the hue linearly across the rainbow key, and
+            // Noise drives *lightness* at full saturation -- so a quiet-noise
+            // particle is a dark version of its hue and Noise blends it toward
+            // white, which is what the greyscale key is showing.
+            //   hue = 0.79 * res          (0 red .. 1 violet)
+            //   L   = 0.21 + 0.60 * noise
+            juce::Colour c = juce::Colour::fromHSL (juce::jlimit (0.0f, 0.79f, 0.79f * res),
+                                                    1.0f,
+                                                    juce::jlimit (0.0f, 1.0f, 0.21f + 0.60f * noise),
+                                                    1.0f);
             const float sz = juce::jmap (1.0f - t, 1.6f, 3.4f);
 
             // motion streak, as in the original

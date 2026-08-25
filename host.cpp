@@ -1180,8 +1180,13 @@ int main(int argc, char** argv) {
         if (!noMidi) openMidiIn(midiDev);
         if (!audioStart()) rc = 1;
         else {
-            rc = runGui(strDispatch(effGetEffectName).empty() ? dllPath
-                                                             : strDispatch(effGetEffectName).c_str());
+            // The window title carries a marker so scripts can tell this
+            // window apart from the recreation's, which is also called
+            // "SwarmSynth" and would otherwise be screenshotted by mistake.
+            std::string title = strDispatch(effGetEffectName);
+            if (title.empty()) title = dllPath;
+            title += " - vsthost32";
+            rc = runGui(title.c_str());
             audioStop();
         }
         closeMidiIn();

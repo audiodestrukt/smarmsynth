@@ -1,0 +1,26 @@
+
+== loading SwarmSynth.dll ==
+   entry point: main
+   AEffect ok: 101 params, 32 programs, 0 in / 2 out
+   param 2 = 0.5000
+   param 4 = 0.2000
+   param 5 = 0.2500
+   param 6 = 0.4000
+   param 7 = 0.0000
+   param 8 = 0.0000
+   param 9 = 0.2000
+   param 11 = 0.3000
+   param 19 = 0.1429
+   param 22 = 0.0000
+   param 23 = 1.0000
+   param 24 = 0.0000
+   param 25 = 1.0000
+   param 26 = 0.0500
+   opened MIDI in [2] Midi Through Port-0
+   audio: 44100 Hz, 512 frames x 4 buffers (~46.4 ms)
+   editor 680 x 536
+
+   keys: z s x d c v g b h n j m = C..B, q 2 w 3 e r 5 t 6 y 7 u = +1 oct
+         up/down = octave, space = all notes off, esc = quit
+         (click the host window's title bar if the plugin GUI has focus)
+
