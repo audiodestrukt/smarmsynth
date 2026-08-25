@@ -178,6 +178,23 @@ MIDI inputs are enabled in the same dialog and persist the same way.
 `SWARM_DEBUG=1` makes the plugin print the rate and buffer it was actually
 given, plus envelope edits -- which is how the 8000 Hz default was found.
 
+### The Anarchy button
+
+The original hides a patch randomiser under Options -> `<anarchy button>`. The
+recreation puts it in the top row where you can reach it, and it is also
+available offline:
+
+```sh
+./swarmrender out.wav --anarchy 12345 --note 48 --len 1.5
+python3 analysis/anarchy_survey.py 64      # how good are random patches?
+```
+
+A randomiser is only worth pressing if most presses give something you can
+hear, so that is measured rather than assumed: over 64 seeds, 98% are audible,
+100% move, and the median centroid wobble is 1.6 semitones. What the original
+randomises internally was not recovered -- this is a designed distribution,
+shaped per parameter, not a reproduction of that one.
+
 ### The loop
 
 `swarmrender` is the new engine behind the same command line as

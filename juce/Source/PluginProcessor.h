@@ -31,6 +31,9 @@ public:
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int) override;
 
+    /** The Anarchy button: randomise the whole patch. */
+    void anarchy();
+
     /** Loads an original SwarmSynth patch (raw chunk or .fxp). */
     bool loadOriginalPreset (const juce::File&);
 

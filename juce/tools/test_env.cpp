@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cmath>
 #include "../Source/SwarmEnvModel.h"
+#include "../Source/SwarmAnarchy.h"
 
 using namespace swarm;
 
@@ -64,6 +65,42 @@ int main()
         same = same && near (back.p[i].t, s.p[i].t, 1e-3f) && near (back.p[i].l, s.p[i].l, 1e-3f);
     check (same, "round trip keeps every time and level");
     check (! deserialisePoints ("", back), "an empty string means 'use the parameters'");
+
+    // ---- the Anarchy button -------------------------------------------
+    std::printf ("\nanarchy\n");
+    bool allInRange = true, allQuantised = true, everyParamVaries = true;
+    float first[kNumParams], seen[kNumParams];
+    bool  varies[kNumParams] = { false };
+    anarchy (first, 1);
+    for (uint32_t seed = 1; seed <= 500; ++seed)
+    {
+        float v[kNumParams];
+        anarchy (v, seed);
+        for (int i = 0; i < kNumParams; ++i)
+        {
+            if (! (v[i] >= 0.0f && v[i] <= 1.0f)) allInRange = false;
+            if (std::fabs (v[i] - quantise (kParams[i].quant, v[i])) > 1e-6f) allQuantised = false;
+            if (std::fabs (v[i] - first[i]) > 1e-6f) varies[i] = true;
+        }
+        (void) seen;
+    }
+    check (allInRange,   "every parameter stays within 0..1 over 500 seeds");
+    check (allQuantised, "every value already obeys its quantiser");
+
+    int stuck = 0;
+    for (int i = 0; i < kNumParams; ++i)
+        if (! varies[i]) ++stuck;
+    // Speed LFO and Overdrive are deliberately zero much of the time, but
+    // nothing should be frozen across all 500 seeds.
+    check (stuck == 0, "no parameter is frozen across 500 seeds");
+    everyParamVaries = (stuck == 0);
+    (void) everyParamVaries;
+
+    float run1[kNumParams], run2[kNumParams];
+    anarchy (run1, 42); anarchy (run2, 42);
+    bool deterministic = true;
+    for (int i = 0; i < kNumParams; ++i) deterministic = deterministic && near (run1[i], run2[i]);
+    check (deterministic, "the same seed gives the same patch");
 
     std::printf ("\n%s (%d failure%s)\n", failures ? "FAILED" : "all passed",
                  failures, failures == 1 ? "" : "s");

@@ -694,11 +694,14 @@ static int renderToFile(const RenderOpts& o) {
 
 static char   g_dumpPrefix[256] = "";
 static int    g_dumpSeq = 0;
+static bool guiScriptStep();
+static bool g_guiQuitAtEnd = false;
 static std::vector<std::string> g_guiSteps;
 static size_t g_guiPos = 0;
 
-// SendMessage rather than PostMessage: the plugin then handles each event
-// before the next is sent, which is what makes click timing meaningful.
+// PostMessage, never SendMessage: a click that opens a menu would otherwise
+// block inside Win32's modal menu loop and never return. The script runs on its
+// own thread and sleeps between steps, so events are still properly spaced.
 static void postMouse(int x, int y, UINT msg, WPARAM extraButtons) {
     POINT pt = { x, y };
     ClientToScreen(g_mainWnd, &pt);
@@ -706,13 +709,28 @@ static void postMouse(int x, int y, UINT msg, WPARAM extraButtons) {
     if (!target) target = g_mainWnd;
     POINT local = pt;
     ScreenToClient(target, &local);
-    SendMessage(target, msg, extraButtons, MAKELPARAM(local.x, local.y));
+    PostMessage(target, msg, extraButtons, MAKELPARAM(local.x, local.y));
 }
 
 static void guiClick(int x, int y, bool right) {
     postMouse(x, y, WM_MOUSEMOVE, 0);
     postMouse(x, y, right ? WM_RBUTTONDOWN : WM_LBUTTONDOWN, right ? MK_RBUTTON : MK_LBUTTON);
     postMouse(x, y, right ? WM_RBUTTONUP   : WM_LBUTTONUP,   0);
+}
+
+// Asynchronous click, for anything that opens a menu: a menu bar runs its own
+// modal message loop, so a synchronous SendMessage into one never returns.
+static void guiPostClick(int x, int y) {
+    POINT pt = { x, y };
+    ClientToScreen(g_mainWnd, &pt);
+    HWND target = WindowFromPoint(pt);
+    if (!target) target = g_mainWnd;
+    POINT local = pt;
+    ScreenToClient(target, &local);
+    const LPARAM lp = MAKELPARAM(local.x, local.y);
+    PostMessage(target, WM_MOUSEMOVE,   0,          lp);
+    PostMessage(target, WM_LBUTTONDOWN, MK_LBUTTON, lp);
+    PostMessage(target, WM_LBUTTONUP,   0,          lp);
 }
 
 static void guiDrag(int x0, int y0, int x1, int y1) {
@@ -725,11 +743,85 @@ static void guiDrag(int x0, int y0, int x1, int y1) {
     postMouse(x1, y1, WM_LBUTTONUP, 0);
 }
 
+// A popup menu is a top-level window of class "#32768". Asking it for its
+// HMENU (MN_GETHMENU) lets the host read the item text directly, which beats
+// trying to screenshot a window the compositor will not hand over.
+#ifndef MN_GETHMENU
+#define MN_GETHMENU 0x01E1
+#endif
+
+static void printMenu(HMENU m, int depth) {
+    const int n = GetMenuItemCount(m);
+    for (int i = 0; i < n; i++) {
+        char buf[256] = {0};
+        GetMenuStringA(m, i, buf, sizeof(buf)-1, MF_BYPOSITION);
+        const UINT st = GetMenuState(m, i, MF_BYPOSITION);
+        printf("   %*s[%2d] %-34s%s%s%s\n", depth * 3, "", i,
+               buf[0] ? buf : "(separator)",
+               (st & MF_CHECKED) ? " [checked]" : "",
+               (st & MF_GRAYED)  ? " [greyed]"  : "",
+               (st & MF_POPUP)   ? " [submenu]" : "");
+        if (st & MF_POPUP) {
+            if (HMENU sub = GetSubMenu(m, i)) printMenu(sub, depth + 1);
+        }
+    }
+}
+
+static void dumpOpenMenu() {
+    HWND h = FindWindowA("#32768", NULL);
+    if (!h) { printf("   no popup menu open\n"); return; }
+    RECT r; GetWindowRect(h, &r);
+    HMENU m = (HMENU)SendMessage(h, MN_GETHMENU, 0, 0);
+    if (!m) { printf("   menu window found but no HMENU\n"); return; }
+    printf("   menu at screen %ld,%ld %ldx%ld:\n",
+           (long)r.left, (long)r.top, (long)(r.right-r.left), (long)(r.bottom-r.top));
+    printMenu(m, 0);
+}
+
+// Clicks a menu item at the position Win32 says it occupies. More reliable
+// than keyboard navigation, which the plugin's menu does not seem to follow.
+static void clickMenuItem(int index) {
+    HWND h = FindWindowA("#32768", NULL);
+    if (!h) { printf("   no popup menu open\n"); return; }
+    HMENU m = (HMENU)SendMessage(h, MN_GETHMENU, 0, 0);
+    if (!m) { printf("   no HMENU\n"); return; }
+    RECT ir;
+    if (!GetMenuItemRect(h, m, (UINT)index, &ir)) {
+        printf("   GetMenuItemRect failed for item %d\n", index);
+        return;
+    }
+    const int cx = (ir.left + ir.right) / 2, cy = (ir.top + ir.bottom) / 2;
+    POINT pt = { cx, cy };
+    HWND target = WindowFromPoint(pt);
+    if (!target) target = h;
+    POINT local = pt; ScreenToClient(target, &local);
+    const LPARAM lp = MAKELPARAM(local.x, local.y);
+    printf("   clicking menu item %d at screen %d,%d\n", index, cx, cy);
+    PostMessage(target, WM_MOUSEMOVE,   0,          lp);
+    PostMessage(target, WM_LBUTTONDOWN, MK_LBUTTON, lp);
+    Sleep(60);
+    PostMessage(target, WM_LBUTTONUP,   0,          lp);
+}
+
+// Selects an item by keyboard, which is how a menu wants to be driven.
+static void selectMenuItem(int index) {
+    HWND h = FindWindowA("#32768", NULL);
+    if (!h) { printf("   no popup menu open\n"); return; }
+    for (int i = 0; i <= index; i++) {
+        PostMessage(h, WM_KEYDOWN, VK_DOWN, 0);
+        PostMessage(h, WM_KEYUP,   VK_DOWN, 0);
+        Sleep(40);
+    }
+    Sleep(120);
+    PostMessage(h, WM_KEYDOWN, VK_RETURN, 0);
+    PostMessage(h, WM_KEYUP,   VK_RETURN, 0);
+}
+
 static void dumpLiveChunk() {
     char path[512];
     sprintf(path, "%s%d.chunk", g_dumpPrefix[0] ? g_dumpPrefix : "live", g_dumpSeq++);
     void* data = NULL;
-    VstIntPtr n = dispatchLocked(effGetChunk, 1, 0, &data);
+    VstIntPtr n = dispatch(effGetChunk, 1, 0, &data);
     if (n > 0 && data) {
         FILE* f = fopen(path, "wb");
         if (f) { fwrite(data, 1, (size_t)n, f); fclose(f);
@@ -737,12 +829,32 @@ static void dumpLiveChunk() {
     } else printf("   effGetChunk returned %ld\n", (long)n);
 }
 
-// Runs one step per timer tick so the plugin gets to process messages between.
+static DWORD WINAPI guiScriptThread(LPVOID) {
+    Sleep(900);                       // let the editor settle and repaint
+    while (guiScriptStep()) Sleep(350);
+    if (g_guiQuitAtEnd) PostMessage(g_mainWnd, WM_CLOSE, 0, 0);
+    return 0;
+}
+
+// Runs one step; called from the script thread.
 static bool guiScriptStep() {
     if (g_guiPos >= g_guiSteps.size()) return false;
     std::string s = g_guiSteps[g_guiPos++];
+    // log before acting: a step that opens a menu will not return until the
+    // menu closes, and we still want to know which step we are on
+    printf("   gui step %d/%d: %s\n", (int)g_guiPos, (int)g_guiSteps.size(), s.c_str());
     int a, b, c, d;
-    if      (sscanf(s.c_str(), "click:%d,%d", &a, &b) == 2)          guiClick(a, b, false);
+    if      (sscanf(s.c_str(), "press:%d,%d", &a, &b) == 2) {
+        postMouse(a, b, WM_MOUSEMOVE, 0);
+        postMouse(a, b, WM_LBUTTONDOWN, MK_LBUTTON);
+    }
+    else if (sscanf(s.c_str(), "release:%d,%d", &a, &b) == 2) {
+        postMouse(a, b, WM_MOUSEMOVE, MK_LBUTTON);
+        postMouse(a, b, WM_LBUTTONUP, 0);
+    }
+    else if (sscanf(s.c_str(), "move:%d,%d", &a, &b) == 2)           postMouse(a, b, WM_MOUSEMOVE, 0);
+    else if (sscanf(s.c_str(), "pclick:%d,%d", &a, &b) == 2)         guiPostClick(a, b);
+    else if (sscanf(s.c_str(), "click:%d,%d", &a, &b) == 2)          guiClick(a, b, false);
     else if (sscanf(s.c_str(), "rclick:%d,%d", &a, &b) == 2)         guiClick(a, b, true);
     else if (sscanf(s.c_str(), "dclick:%d,%d", &a, &b) == 2) {
         // two clicks inside the system double-click time, with a real gap
@@ -750,9 +862,11 @@ static bool guiScriptStep() {
     }
     else if (sscanf(s.c_str(), "drag:%d,%d,%d,%d", &a, &b, &c, &d) == 4) guiDrag(a, b, c, d);
     else if (s == "dump")                                            dumpLiveChunk();
+    else if (s == "menudump")                                        dumpOpenMenu();
+    else if (sscanf(s.c_str(), "menuitem:%d", &a) == 1)              selectMenuItem(a);
+    else if (sscanf(s.c_str(), "menuclick:%d", &a) == 1)             clickMenuItem(a);
     else if (s.rfind("wait", 0) == 0)                                { /* a tick is the wait */ }
     else printf("   ?? gui step '%s'\n", s.c_str());
-    printf("   gui step %d/%d: %s\n", (int)g_guiPos, (int)g_guiSteps.size(), s.c_str());
     return true;
 }
 
@@ -774,8 +888,7 @@ static void parseGuiScript(const char* text) {
 // ---------------------------------------------------------------------------
 
 static bool g_pokePending = false;
-static int  g_guiTicks = 0;
-static bool g_guiQuitAtEnd = false;
+static bool g_guiThreadStarted = false;
 static int  g_pokeTicks   = 0;
 static int  g_octave = 4;
 static bool g_keyHeld[256] = { false };
@@ -904,10 +1017,9 @@ static int runGui(const char* title) {
                              RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
                 dispatch(effEditIdle);
             }
-            if (!g_pokePending && !g_guiSteps.empty()) {
-                if (++g_guiTicks % 12 == 0) {
-                    if (!guiScriptStep() && g_guiQuitAtEnd) PostMessage(g_mainWnd, WM_CLOSE, 0, 0);
-                }
+            if (!g_pokePending && !g_guiSteps.empty() && !g_guiThreadStarted) {
+                g_guiThreadStarted = true;
+                CloseHandle(CreateThread(NULL, 0, guiScriptThread, NULL, 0, NULL));
             }
             dispatch(53 /*effIdle, deprecated but some old plugins want it*/);
             if (g_wantResize) {
@@ -939,7 +1051,10 @@ static void usage() {
     "  --dump-chunk <file>    write the plugin's opaque program chunk to a file\n"
     "  --dump-prefix <p>      in the GUI, F2 dumps the live chunk to <p><n>.chunk\n"
     "  --gui-script <steps>   drive the editor: semicolon-separated\n"
-    "                         click:x,y rclick:x,y dclick:x,y drag:x0,y0,x1,y1\n"
+    "                         click:x,y pclick:x,y rclick:x,y dclick:x,y\n"
+    "                         press:x,y release:x,y move:x,y\n"
+    "                         menudump menuitem:n -- read/drive a popup menu\n"
+    "                         drag:x0,y0,x1,y1 -- pclick is async, for menus\n"
     "                         wait dump -- coordinates are editor pixels\n"
     "  --gui-quit             close once the script finishes\n"
     "  --dump-bank <file>     write the plugin's opaque bank chunk to a file\n"

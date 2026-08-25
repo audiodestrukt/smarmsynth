@@ -23,6 +23,7 @@ private:
     void timerCallback() override;
     void selectDimension (int d);
     void layoutInBaseUnits();
+    void updatePatchName();
 
     SwarmAudioProcessor& proc;
 
@@ -45,6 +46,8 @@ private:
     // shares the processor's keyboard state, so on-screen notes reach the engine
     std::unique_ptr<juce::MidiKeyboardComponent> keyboard;
     juce::TextButton presetsButton { "Presets" }, optionsButton { "Options" }, helpButton { "Help" };
+    juce::TextButton anarchyButton { "ANARCHY" };
+    juce::Label      patchNameLabel;
     std::unique_ptr<juce::FileChooser> chooser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SwarmAudioProcessorEditor)

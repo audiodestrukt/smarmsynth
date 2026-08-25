@@ -150,6 +150,34 @@ Deleting a point folds its duration into the neighbouring segment, so the
 envelope keeps its overall length. Adding one splits the segment it landed in,
 again preserving total length.
 
+## The Anarchy button
+
+It lives under **Options -> `<anarchy button>`** -- that is the literal menu
+text. The binary also carries the format string `random patch #%X`, so a press
+renames the patch as well as randomising it.
+
+Finding it needed a way to read a Win32 popup menu, which no screenshot could
+capture here: the host now asks the menu window (class `#32768`) for its HMENU
+via `MN_GETHMENU` and prints the item text directly (`menudump`). The Options
+menu is:
+
+```
+[0] Synthesis            [5] Visualisation
+[1] Speed LFO            [7] Reset Devices
+[2] Midi Controller Map  [8] <anarchy button>
+[3] Determinism seeding
+```
+
+What it randomises internally was **not** recovered, so the recreation's
+version is a designed randomiser rather than a reproduction. It is measured
+instead of assumed: `analysis/anarchy_survey.py` renders many seeds and reports
+how many are audible and how much they actually move. Movement is measured as
+the wobble of the spectral centroid and the depth of the loudness envelope, not
+as frame-to-frame spectral difference -- that first metric turned out to be
+measuring noise, since every "moving" patch it liked simply had a high Noise
+Var. Current numbers over 64 seeds: 98% audible, 100% moving, median centroid
+wobble 1.6 semitones.
+
 ## The motion law — the weak spot
 
 What is measured:

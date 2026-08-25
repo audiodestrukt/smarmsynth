@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "SwarmPreset.h"
 #include "SwarmDefaults.h"
+#include "SwarmAnarchy.h"
 #include <cstdio>
 #include <cstdlib>
 
@@ -211,6 +212,25 @@ swarm::EnvShape SwarmAudioProcessor::envShapeFor (int slot) const
                      raw (i + 4), ms (raw (i + 5)), raw (i + 6));
     deserialisePoints (envPointsFor (slot).toStdString(), sh);
     return sh;
+}
+
+void SwarmAudioProcessor::anarchy()
+{
+    float values[kNumParams];
+    const auto seed = (uint32_t) juce::Random::getSystemRandom().nextInt();
+    swarm::anarchy (values, seed);
+
+    for (int i = 0; i < kNumParams; ++i)
+        if (auto* p = apvts.getParameter (kParams[i].id))
+            p->setValueNotifyingHost (values[i]);
+
+    // a randomised patch starts from the plain envelope shapes
+    for (int e = 0; e < NumEnvs; ++e) setEnvPoints (e, {});
+
+    // the original names these "random patch #%X"
+    apvts.state.setProperty ("patchName",
+                             "random patch #" + juce::String::toHexString ((int) (seed & 0xffff)).toUpperCase(),
+                             nullptr);
 }
 
 bool SwarmAudioProcessor::loadOriginalPreset (const juce::File& f)

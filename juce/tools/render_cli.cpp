@@ -13,6 +13,7 @@
 #include "../Source/SwarmParams.h"
 #include "../Source/SwarmEngine.h"
 #include "../Source/SwarmDefaults.h"
+#include "../Source/SwarmAnarchy.h"
 
 using namespace swarm;
 
@@ -74,7 +75,8 @@ static bool writeWav (const char* path, const std::vector<float>& x, int ch, int
 int main (int argc, char** argv)
 {
     if (argc < 2) { printf ("usage: swarmrender out.wav [--note n] [--vel v] [--len s]"
-                            " [--tail s] [--sr hz] [--param i=v]...\n"); return 1; }
+                            " [--tail s] [--sr hz] [--param i=v]...\n"
+                            "                   [--anarchy seed]\n"); return 1; }
     setDefaults();
     const char* out = argv[1];
     int note = 60, vel = 100, sr = 44100, block = 512;
@@ -91,6 +93,7 @@ int main (int argc, char** argv)
         else if (a == "--tail"  && has) tail = atof (argv[++i]);
         else if (a == "--sr"    && has) sr   = atoi (argv[++i]);
         else if (a == "--block" && has) block = atoi (argv[++i]);
+        else if (a == "--anarchy" && has) anarchy (gParam, (uint32_t) strtoul (argv[++i], nullptr, 10));
         else if (a == "--param" && has)
         {
             std::string s = argv[++i];

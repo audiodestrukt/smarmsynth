@@ -127,16 +127,31 @@ inline constexpr ParamSpec kParams[kNumParams] = {
     { 100, "spd_rel_lv", "Spd Rel Lv", "%", Quant::Real, Disp::Pct, 1272, true },
 };
 
-// The quantiser the original applies to an incoming normalised value.
+// The quantiser the original applies to an incoming normalised value. It
+// truncates rather than rounds -- verified against the plugin's own readback
+// with zero error across a 33-point sweep of every parameter.
+//
+// kGrip nudges the value away from zero before truncating. Without it a value
+// already on the grid but held as, say, 0.58999997 truncates to the step below,
+// so applying the quantiser twice walks the value downwards. The epsilon is a
+// ten-thousandth of a step, so the measured behaviour is unchanged.
+inline constexpr float kGrip = 1.0e-4f;
+
 inline float quantise (Quant q, float v) {
     if (v < 0.0f) v = 0.0f; else if (v > 1.0f) v = 1.0f;
     switch (q) {
-        case Quant::Pct:   return (float) (int) (v * 100.0f) / 100.0f;
-        case Quant::Pan:   return ((float) (int) (v * 200.0f - 100.0f) + 100.0f) / 200.0f;
-        case Quant::Count: return (float) (int) (v * 63.0f) / 63.0f;
-        case Quant::Ms1k:  return (float) (int) (v * 999.0f) / 999.0f;
-        case Quant::Semi:  return (float) (int) (v * 24.0f) / 24.0f;
-        case Quant::Pct50: return (float) (int) (v * 50.0f) / 50.0f;
+        case Quant::Pct:   return (float) (int) (v * 100.0f + kGrip) / 100.0f;
+        case Quant::Pan: {
+            // signed, and truncated toward zero, so the nudge has to go away
+            // from zero or negative values land a step too high
+            float x = v * 200.0f - 100.0f;
+            x += (x >= 0.0f ? kGrip : -kGrip);
+            return ((float) (int) x + 100.0f) / 200.0f;
+        }
+        case Quant::Count: return (float) (int) (v * 63.0f  + kGrip) / 63.0f;
+        case Quant::Ms1k:  return (float) (int) (v * 999.0f + kGrip) / 999.0f;
+        case Quant::Semi:  return (float) (int) (v * 24.0f  + kGrip) / 24.0f;
+        case Quant::Pct50: return (float) (int) (v * 50.0f  + kGrip) / 50.0f;
         case Quant::Real:  default: return v;
     }
 }

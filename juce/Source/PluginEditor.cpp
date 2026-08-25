@@ -9,6 +9,7 @@ namespace {
 struct R { int x, y, w, h; juce::Rectangle<int> r() const { return { x, y, w, h }; } };
 
 constexpr R kMenu       { 8,   6, 208,  22 };
+constexpr R kAnarchy    {220,   6,  50,  22 };
 constexpr R kLogo       { 8,  34, 260,  62 };
 constexpr R kColumns    { 8, 104, 260, 137 };
 constexpr R kEnvBlock   { 8, 245, 260, 145 };
@@ -106,8 +107,25 @@ SwarmAudioProcessorEditor::SwarmAudioProcessorEditor (SwarmAudioProcessor& p)
     mk (kLowpass,  16, "LoPass",    colours::text);
     mk (kQ,        17, "Q",         colours::text);
 
-    for (auto* b : { &presetsButton, &optionsButton, &helpButton })
+    for (auto* b : { &presetsButton, &optionsButton, &helpButton, &anarchyButton })
         addAndMakeVisible (*b);
+
+    // The original hides this behind Options -> "<anarchy button>"; here it is
+    // just a button, since that is what it is.
+    anarchyButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff8a2f2f));
+    anarchyButton.setColour (juce::TextButton::textColourOffId, juce::Colours::white);
+    anarchyButton.onClick = [this]
+    {
+        proc.anarchy();
+        for (int d = 0; d < 5; ++d) { homeKnobs[d]->repaint(); rangeKnobs[d]->repaint(); }
+        selectDimension (selectedDim);      // rebuild the envelope panels
+        updatePatchName();
+    };
+
+    patchNameLabel.setJustificationType (juce::Justification::centredLeft);
+    patchNameLabel.setColour (juce::Label::textColourId, colours::text.withAlpha (0.85f));
+    addAndMakeVisible (patchNameLabel);
+    updatePatchName();
 
     presetsButton.onClick = [this]
     {
@@ -182,6 +200,14 @@ void SwarmAudioProcessorEditor::selectDimension (int d)
     }
     layoutInBaseUnits();
     repaint();
+}
+
+void SwarmAudioProcessorEditor::updatePatchName()
+{
+    const auto n = proc.apvts.state.getProperty ("patchName", juce::String()).toString();
+    patchNameLabel.setText (n, juce::dontSendNotification);
+    const float s = (float) getWidth() / (float) kBaseW;
+    patchNameLabel.setFont (juce::Font (juce::FontOptions (juce::jmax (7.0f, 9.0f * s))));
 }
 
 void SwarmAudioProcessorEditor::mouseDown (const juce::MouseEvent& e)
@@ -259,6 +285,8 @@ void SwarmAudioProcessorEditor::layoutInBaseUnits()
     place (presetsButton, menu.removeFromLeft (bw).reduced (1));
     place (optionsButton, menu.removeFromLeft (bw).reduced (1));
     place (helpButton,    menu.reduced (1));
+    place (anarchyButton, kAnarchy.r().reduced (1));
+    place (patchNameLabel, juce::Rectangle<int> (278, 6, 200, 14));
 
     // five columns: header, home knob, range knob
     auto cols = kColumns.r().reduced (3, 3);
