@@ -213,9 +213,12 @@ over the parameter space.
 
 ### In the browser
 
+**Live: https://audiodestrukt.github.io/smarmsynth/**
+
 ```sh
 web/build.sh                 # needs Emscripten
 python3 -m http.server 8731  # then open localhost:8731/web/
+web/deploy-pages.sh          # publish to GitHub Pages
 ```
 
 The **engine** is shared literally — `web/src/wasm_entry.cpp` includes the same
@@ -280,6 +283,19 @@ scores 14.8 dB against 24.6 dB. The metric won.
 
 `--render` is the one that matters for re-creation work: it is deterministic and
 headless, so a recreation can be A/B'd against the original per patch, per note.
+
+## How this was made
+
+Written with [Claude Code](https://claude.com/claude-code) running **Claude
+Opus 5**, in a single long session: the host, the measurement scripts, the JUCE
+recreation, the WebAssembly build, and the findings write-up.
+
+That is worth stating plainly given what the project claims. The method here is
+measurement — every law in [FINDINGS.md](analysis/FINDINGS.md) is a fit with a
+residual attached, and the parts that are still guesses are labelled as guesses.
+Those measurements were taken by scripts in this repository, against the real
+plugin, and anyone can re-run them. The claims rest on the numbers, not on who
+or what typed them.
 
 ## Files
 
