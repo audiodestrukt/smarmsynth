@@ -204,6 +204,20 @@ attack transient rather than the swarm.
 the Anarchy randomiser now samples from that distribution instead of uniformly
 over the parameter space.
 
+### In the browser
+
+```sh
+web/build.sh                 # needs Emscripten
+python3 -m http.server 8731  # then open localhost:8731/web/
+```
+
+The **engine** is shared literally — `web/src/wasm_entry.cpp` includes the same
+headers the plugin compiles, and it built under Emscripten unchanged, first try,
+because nothing in the DSP references a framework. The **interface** is not:
+JUCE does not target the browser, so it is rewritten in HTML and canvas
+following the same measured laws. See [web/README.md](web/README.md), including
+the two things that make an Emscripten AudioWorklet awkward.
+
 ### The Anarchy button
 
 The original hides a patch randomiser under Options -> `<anarchy button>`. The

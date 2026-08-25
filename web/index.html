@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SwarmSynth in the browser</title>
+<style>
+  :root {
+    --ground: #0C1116; --panel: #2f3338; --panel-edge: #7d8d9b;
+    --chrome-a: #3d5a72; --chrome-b: #15222e;
+    --ink: #dee6ed; --muted: #8496a3; --accent: #f5c518;
+    --vol:#7f8fe0; --pitch:#5fc98a; --pan:#d97b7b; --res:#d2d27a; --noise:#b07fd9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 18px 48px;
+    background: linear-gradient(180deg, var(--chrome-a), var(--chrome-b)) fixed, var(--ground);
+    color: var(--ink);
+    font: 14px/1.5 ui-sans-serif, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { max-width: 1000px; margin: 0 auto; display: grid; gap: 14px; }
+
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .brand {
+    font: 800 20px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
+    color: var(--accent); text-shadow: 0 2px 0 #5a4400;
+  }
+  .spacer { flex: 1 1 auto; }
+  button, select {
+    font: inherit; color: var(--ink); background: #384049;
+    border: 1px solid var(--panel-edge); border-radius: 3px; padding: 7px 12px;
+    cursor: pointer;
+  }
+  button:hover, select:hover { background: #414a54; }
+  #anarchy { background: #8a2f2f; border-color: #b04a4a; font-weight: 700; letter-spacing: .06em; }
+  #anarchy:hover { background: #a03636; }
+  #status { color: var(--muted); font-size: 12.5px; }
+  #status[data-busy="1"] { color: var(--accent); }
+  #patchname { color: var(--accent); font: 600 13px ui-monospace, monospace; }
+
+  .main { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 14px; }
+  @media (max-width: 800px) { .main { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--panel-edge);
+    border-radius: 3px; padding: 10px;
+  }
+  #columns { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .column { display: grid; gap: 4px; }
+  .colname {
+    text-align: center; font: 700 11px/1.6 ui-monospace, monospace;
+    letter-spacing: .06em; color: hsl(var(--h) 55% 68%);
+  }
+  .knob-slot { display: grid; justify-items: center; gap: 2px; }
+  .knob-slot.inert { opacity: .45; }
+  .klabel { font-size: 10px; color: hsl(var(--h, 205) 45% 70%); }
+  .kval { font: 10.5px ui-monospace, monospace; color: var(--ink); }
+  .knob {
+    --v: 0.5;
+    width: 34px; height: 34px; border-radius: 50%; position: relative;
+    background: radial-gradient(circle at 35% 30%,
+      hsl(var(--h, 205) 30% 88%), hsl(var(--h, 205) 25% 55%) 70%, hsl(var(--h, 205) 30% 40%));
+    border: 1px solid rgba(0,0,0,.55);
+    box-shadow: inset 0 -2px 4px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.5);
+    cursor: ns-resize; touch-action: none;
+  }
+  .knob i {
+    position: absolute; inset: 0;
+    transform: rotate(calc((var(--v) * 270deg) - 135deg));
+  }
+  .knob i::after {
+    content: ''; position: absolute; left: 50%; top: 4px;
+    width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%;
+    background: hsl(var(--h, 205) 70% 28%);
+  }
+  .knob:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #motion { display: grid; grid-template-columns: repeat(auto-fit, minmax(58px, 1fr)); gap: 6px; }
+
+  .viewwrap {
+    background: #c6dced; border: 1px solid var(--panel-edge); border-radius: 3px;
+    padding: 8px; display: grid; gap: 6px;
+  }
+  #view { display: block; width: 100%; height: 300px; border-radius: 2px; }
+  .keys-row { display: flex; align-items: center; gap: 10px; font-size: 11px; color: #17222b; }
+  .ramp { height: 9px; flex: 0 0 70px; border: 1px solid rgba(0,0,0,.4); }
+  .ramp.res { background: linear-gradient(90deg,
+    hsl(0 100% 50%), hsl(57 100% 50%), hsl(114 100% 50%), hsl(171 100% 50%),
+    hsl(228 100% 50%), hsl(284 100% 50%)); }
+  .ramp.noise { background: linear-gradient(90deg, hsl(0 0% 21%), hsl(0 0% 81%)); }
+
+  #keys {
+    display: flex; position: relative; height: 84px;
+    background: #1a2027; border: 1px solid var(--panel-edge); border-radius: 3px;
+    padding: 3px; overflow: hidden;
+  }
+  .key {
+    flex: 1 1 0; min-width: 0; background: #f2f2f2; border: 1px solid #2a2a2a;
+    border-radius: 0 0 2px 2px; padding: 0; cursor: pointer;
+  }
+  .key.black {
+    background: #23262a; flex: 0 0 0; width: 0;
+    margin: 0 -0.6% 0 -0.6%; z-index: 2; height: 62%;
+    min-width: 1.35%;
+  }
+  .key.on { background: var(--accent); }
+  .key.black.on { background: #b8930f; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .hint kbd {
+    background: #384049; border: 1px solid var(--panel-edge);
+    border-radius: 3px; padding: 1px 5px; font: 11px ui-monospace, monospace;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <span class="brand">SWARMSYNTH</span>
+    <span id="patchname">—</span>
+    <span class="spacer"></span>
+    <select id="preset" aria-label="Factory patch"><option value="">— factory patches —</option></select>
+    <button id="anarchy" type="button">ANARCHY</button>
+    <button id="start" type="button">Start audio</button>
+  </header>
+
+  <div id="status">click Start audio, or just play a key</div>
+
+  <div class="main">
+    <div class="panel">
+      <div id="columns"></div>
+    </div>
+
+    <div class="viewwrap">
+      <canvas id="view" aria-label="The oscillator swarm moving inside its parameter box"></canvas>
+      <div class="keys-row">
+        <span>Res</span><span class="ramp res"></span>
+        <span>Noise</span><span class="ramp noise"></span>
+        <span style="margin-left:auto">Pitch up &middot; Pan across &middot; Vol into the box</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel"><div id="motion"></div></div>
+
+  <div id="keys"></div>
+
+  <p class="hint">
+    Play with <kbd>A</kbd>–<kbd>L</kbd> (and <kbd>W</kbd> <kbd>E</kbd> <kbd>T</kbd> <kbd>Y</kbd> <kbd>U</kbd>
+    for the black keys), <kbd>Z</kbd>/<kbd>X</kbd> to change octave. Drag a knob vertically.
+    The same C++ engine as the plugin, compiled to WebAssembly.
+  </p>
+</div>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
