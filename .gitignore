@@ -4,11 +4,8 @@ SwarmSynth.dll
 SwarmSynth32.dll
 *.dll
 
-# The 45 factory patches are the original author's work. Extract them from your
-# own copy of the plugin with analysis/extract_presets.sh; they are not
-# distributed here.
-presets/
-*.swarmpatch
+# The 45 factory patches ARE checked in, under presets/original/ -- SwarmSynth
+# was released as freeware in 2012. See presets/original/NOTICE.md.
 
 # Raw state chunks dumped out of the original plugin: its data, not ours.
 *.chunk

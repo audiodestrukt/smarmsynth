@@ -174,8 +174,11 @@ rather than the menu index, because Wine reports menu item rects with a
 consistent vertical offset -- clicking "index 43" actually selects the entry
 five rows up.
 
-These patches are the original author's work, so they are **not** distributed
-with this project. Extract them from your own copy of the plugin.
+SwarmSynth was released as freeware in 2012, and the extracted patches are
+checked in under `presets/original/` with attribution in
+`presets/original/NOTICE.md`. Each file is a verbatim state chunk as the
+original produced it; the parameter values are the original author's work.
+`analysis/extract_presets.sh` regenerates them from a copy of the plugin.
 
 Having them turns the A/B into a real benchmark: `analysis/preset_ab.py`
 renders every factory patch through both engines and scores them, which is a

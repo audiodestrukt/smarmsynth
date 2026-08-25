@@ -181,17 +181,18 @@ given, plus envelope edits -- which is how the 8000 Hz default was found.
 ### Patches
 
 The original's 45 factory patches live inside its own resources rather than as
-files. Pull them out of your own copy of the plugin:
+files. They are checked in under `presets/original/` — SwarmSynth was released
+as freeware in 2012; see the [NOTICE](presets/original/NOTICE.md). They are also
+regenerable from a copy of the plugin:
 
 ```sh
 analysis/extract_presets.sh          # -> presets/original/*.swarmpatch
 python3 analysis/preset_ab.py        # score the recreation on all of them
 ```
 
-The recreation's **Presets** button then lists whatever it finds, in
+The recreation's **Presets** button lists whatever it finds, in
 `$SWARM_PRESETS`, a `presets/` directory next to the binary, or under your
-application-data and documents directories. They are the original author's work
-and are not distributed here.
+application-data and documents directories.
 
 The same patches double as the DSP benchmark. Synthetic one-parameter tests
 only go so far; 45 real patches are what the synth actually sounds like.
