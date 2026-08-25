@@ -172,7 +172,14 @@ public:
         vel  = velocity;
         gate = true;
 
-        rng.seed (cfg.seed);
+        // MEASURED: the original seeds from the patch and then lets the
+        // generator run *forward*. Two instances loading the same patch render
+        // an identical first note, but three notes in a row inside one instance
+        // all differ. So reseed only when the Seed parameter actually changes --
+        // reseeding every note-on would make every note identical, which loses a
+        // lot of the character.
+        if (cfg.seed != seededWith) { rng.seed (cfg.seed); seededWith = cfg.seed; }
+
         // MEASURED: Std. Dev. changes how tightly the cloud starts packed.
         // MODELLED: a gaussian scatter whose sigma is stdDev, clipped to the box.
         for (int i = 0; i < cfg.numParticles; ++i)
@@ -391,6 +398,7 @@ private:
     mutable std::atomic<int> viewCount { 0 };
     Env      envs[NumEnvs];
     Rng      rng;
+    uint32_t seededWith = 0;   // reseed only when the Seed parameter changes
     double   srate = 44100.0;
     float    currentHz = 440.0f, targetHz = 440.0f, vel = 1.0f, level = 0.0f;
     float    lpZ1 = 0, lpZ2 = 0, rpZ1 = 0, rpZ2 = 0, lfoPhase = 0;

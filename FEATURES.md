@@ -52,6 +52,11 @@ not equally expensive:
   positions. A short ring buffer of past positions per particle would be much
   closer and costs nothing structurally — no 3D engine involved. This is the
   cheap half.
+- **The streaks are clamped far too short.** `SwarmView` limits a streak to
+  ±14 px. In the original a fast, high-Noise particle draws a pale line right
+  across the cube — which is what those white lines after an Anarchy press are
+  (see `analysis/FINDINGS.md`). Raising or removing the clamp is a one-line
+  change and is the most visible difference of the three.
 - **The projection is faked.** The box is drawn as a front and a back rectangle
   with particle positions linearly interpolated between them by their Vol value,
   rather than a real perspective divide. Straight-line motion through the box

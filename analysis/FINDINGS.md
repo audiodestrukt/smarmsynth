@@ -258,6 +258,43 @@ values repeating and 53,000 "particle" pixels. It had screenshotted the
 The host's window is now titled `SwarmSynth - vsthost32` so the two can never be
 confused again.
 
+## Seeding: reproducible start, different every note
+
+The Seed parameter is stored in the patch, and it does exactly what the Options
+menu's "Determinism seeding" entry implies:
+
+- Two separate instances loading the **same patch** render a **bit-identical**
+  first note. Checked on Gentle Gong, Metallic Thwack and Drunk Pixies.
+- Three notes in a row **inside one instance** all **differ** (max sample
+  difference 1.88 between the first two).
+
+So the patch's Seed sets the starting state and the generator then runs
+*forward* across notes — reproducible from a known start, but a fresh scatter
+of particle positions every time you play. That note-to-note variation is a
+large part of the character.
+
+The recreation originally reseeded from the Seed value on every note-on, which
+made every note identical. It now reseeds only when the Seed parameter actually
+changes, and reproduces both halves of the behaviour: notes differ from one
+another, first note identical across runs.
+
+## Those pale lines shooting across the cube
+
+Not an overlay, and not a guide: they are **swarm elements**. Two of the
+measured laws combine to produce them.
+
+- A particle's HSL lightness is `0.21 + 0.60 * Noise`, so a particle near
+  maximum Noise sits at lightness 0.81 — pale, close to white.
+- Particles are drawn as motion streaks, so at high Speed a single one draws a
+  long straight segment, and bouncing off the walls sends it right across the
+  box.
+
+Set Noise to 100% and Speed to 100% and you get exactly that picture without
+touching Anarchy — which is worth knowing, because Anarchy pushes both high.
+
+One consequence for the recreation: its streaks are clamped to a few pixels, so
+it can never draw these. See `FEATURES.md`.
+
 ## The Anarchy button
 
 It lives under **Options -> `<anarchy button>`** -- that is the literal menu

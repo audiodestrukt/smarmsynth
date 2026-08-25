@@ -78,10 +78,10 @@ int main (int argc, char** argv)
 {
     if (argc < 2) { printf ("usage: swarmrender out.wav [--note n] [--vel v] [--len s]"
                             " [--tail s] [--sr hz] [--param i=v]...\n"
-                            "                   [--anarchy seed] [--preset file]\n"); return 1; }
+                            "                   [--anarchy seed] [--preset file] [--repeat n]\n"); return 1; }
     setDefaults();
     const char* out = argv[1];
-    int note = 60, vel = 100, sr = 44100, block = 512;
+    int note = 60, vel = 100, sr = 44100, block = 512, repeat = 1;
     double len = 2.0, tail = 2.0;
     std::vector<int> notes;
 
@@ -93,6 +93,7 @@ int main (int argc, char** argv)
         else if (a == "--vel"   && has) vel  = atoi (argv[++i]);
         else if (a == "--len"   && has) len  = atof (argv[++i]);
         else if (a == "--tail"  && has) tail = atof (argv[++i]);
+        else if (a == "--repeat"&& has) repeat = atoi (argv[++i]);
         else if (a == "--sr"    && has) sr   = atoi (argv[++i]);
         else if (a == "--block" && has) block = atoi (argv[++i]);
         else if (a == "--preset" && has)
@@ -127,24 +128,28 @@ int main (int argc, char** argv)
     engine.prepare (sr, block);
     engine.setSettings (buildSettings());
 
-    const int total = (int) ((len + tail) * sr);
+    const int cycle = (int) ((len + tail) * sr);
     const int onFor = (int) (len * sr);
     std::vector<float> acc;
-    acc.reserve ((size_t) total * 2);
+    acc.reserve ((size_t) cycle * repeat * 2);
     std::vector<float> L (block, 0.0f), R (block, 0.0f);
 
-    engine.noteOn (notes[0], vel / 127.0f);
-    bool released = false;
-    for (int pos = 0; pos < total; )
+    for (int rep = 0; rep < repeat; ++rep)
     {
-        const int n = std::min (block, total - pos);
-        if (! released && pos + n > onFor) { engine.noteOff(); released = true; }
-        std::fill (L.begin(), L.begin() + n, 0.0f);
-        std::fill (R.begin(), R.begin() + n, 0.0f);
-        engine.process (L.data(), R.data(), n);
-        for (int i = 0; i < n; ++i) { acc.push_back (L[i]); acc.push_back (R[i]); }
-        pos += n;
+        engine.noteOn (notes[0], vel / 127.0f);
+        bool released = false;
+        for (int pos = 0; pos < cycle; )
+        {
+            const int n = std::min (block, cycle - pos);
+            if (! released && pos + n > onFor) { engine.noteOff(); released = true; }
+            std::fill (L.begin(), L.begin() + n, 0.0f);
+            std::fill (R.begin(), R.begin() + n, 0.0f);
+            engine.process (L.data(), R.data(), n);
+            for (int i = 0; i < n; ++i) { acc.push_back (L[i]); acc.push_back (R[i]); }
+            pos += n;
+        }
     }
+    const int total = cycle * repeat;
 
     double peak = 0.0;
     for (float v : acc) peak = std::max (peak, (double) std::fabs (v));

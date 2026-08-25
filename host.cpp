@@ -638,52 +638,55 @@ struct RenderOpts {
     int   velocity;
     double noteLen;
     double tail;
-    RenderOpts() : velocity(100), noteLen(2.0), tail(2.0) {}
+    int   repeat;
+    RenderOpts() : velocity(100), noteLen(2.0), tail(2.0), repeat(1) {}
 };
 
 static int renderToFile(const RenderOpts& o) {
-    double total = o.noteLen + o.tail;
-    int totalFrames = (int)(total * g_sampleRate);
-    int onFrames    = (int)(o.noteLen * g_sampleRate);
-    int channels    = g_effect->numOutputs >= 2 ? 2 : 1;
+    const double cycle = o.noteLen + o.tail;
+    const int cycleFrames = (int)(cycle * g_sampleRate);
+    const int onFrames    = (int)(o.noteLen * g_sampleRate);
+    const int channels    = g_effect->numOutputs >= 2 ? 2 : 1;
     std::vector<float> acc;
-    acc.reserve((size_t)totalFrames * channels);
+    acc.reserve((size_t)cycleFrames * o.repeat * channels);
 
-    bool sentOn = false, sentOff = false;
-    int pos = 0;
-    while (pos < totalFrames) {
-        int frames = g_blockSize;
-        if (pos + frames > totalFrames) frames = totalFrames - pos;
+    for (int rep = 0; rep < o.repeat; rep++) {
+        bool sentOn = false, sentOff = false;
+        int pos = 0;
+        while (pos < cycleFrames) {
+            int frames = g_blockSize;
+            if (pos + frames > cycleFrames) frames = cycleFrames - pos;
 
-        std::vector<MidiMsg> batch;
-        if (!sentOn) {
-            for (size_t i = 0; i < o.notes.size(); i++) {
-                MidiMsg m; m.b[0] = 0x90; m.b[1] = (unsigned char)o.notes[i];
-                m.b[2] = (unsigned char)o.velocity; m.b[3] = 0;
-                batch.push_back(m);
+            std::vector<MidiMsg> batch;
+            if (!sentOn) {
+                for (size_t i = 0; i < o.notes.size(); i++) {
+                    MidiMsg m; m.b[0] = 0x90; m.b[1] = (unsigned char)o.notes[i];
+                    m.b[2] = (unsigned char)o.velocity; m.b[3] = 0;
+                    batch.push_back(m);
+                }
+                sentOn = true;
             }
-            sentOn = true;
-        }
-        if (!sentOff && pos + frames > onFrames) {
-            for (size_t i = 0; i < o.notes.size(); i++) {
-                MidiMsg m; m.b[0] = 0x80; m.b[1] = (unsigned char)o.notes[i];
-                m.b[2] = 0; m.b[3] = 0;
-                batch.push_back(m);
+            if (!sentOff && pos + frames > onFrames) {
+                for (size_t i = 0; i < o.notes.size(); i++) {
+                    MidiMsg m; m.b[0] = 0x80; m.b[1] = (unsigned char)o.notes[i];
+                    m.b[2] = 0; m.b[3] = 0;
+                    batch.push_back(m);
+                }
+                sentOff = true;
             }
-            sentOff = true;
-        }
 
-        plugLock();
-        sendEvents(batch);
-        renderBlockLocked(frames);
-        const float* L = g_outPtr.size() > 0 ? g_outPtr[0] : NULL;
-        const float* R = g_outPtr.size() > 1 ? g_outPtr[1] : L;
-        for (int i = 0; i < frames; i++) {
-            acc.push_back(L ? L[i] : 0.0f);
-            if (channels == 2) acc.push_back(R ? R[i] : 0.0f);
+            plugLock();
+            sendEvents(batch);
+            renderBlockLocked(frames);
+            const float* L = g_outPtr.size() > 0 ? g_outPtr[0] : NULL;
+            const float* R = g_outPtr.size() > 1 ? g_outPtr[1] : L;
+            for (int i = 0; i < frames; i++) {
+                acc.push_back(L ? L[i] : 0.0f);
+                if (channels == 2) acc.push_back(R ? R[i] : 0.0f);
+            }
+            plugUnlock();
+            pos += frames;
         }
-        plugUnlock();
-        pos += frames;
     }
 
     double peak = 0.0;
@@ -1085,6 +1088,7 @@ static void usage() {
     "    --vel <v>            velocity (default 100)\n"
     "    --len <sec>          how long the note is held (default 2)\n"
     "    --tail <sec>         extra time rendered after note off (default 2)\n"
+    "    --repeat <n>         play the note n times in one instance\n"
     "  --verbose              log unhandled audioMaster calls\n");
 }
 
@@ -1128,6 +1132,7 @@ int main(int argc, char** argv) {
         else if (a == "--vel"     && nx) ro.velocity = atoi(argv[++i]);
         else if (a == "--len"     && nx) ro.noteLen = atof(argv[++i]);
         else if (a == "--tail"    && nx) ro.tail = atof(argv[++i]);
+        else if (a == "--repeat"  && nx) ro.repeat = atoi(argv[++i]);
         else if (a == "--param"   && nx) {
             std::string s = argv[++i];
             size_t eq = s.find('=');
