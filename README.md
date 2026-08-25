@@ -286,11 +286,11 @@ headless, so a recreation can be A/B'd against the original per patch, per note.
 
 ## How this was made
 
-I built this with Claude Code (Opus 5). I ran the original and the recreation
-side by side, said what was wrong, and remembered things about the plugin it
-could not have known (the Anarchy button, the per-note randomisation, the
-internal clipping). It wrote the host, the analysis scripts, the JUCE code and
-the web build.
+I built this with Claude Code: Opus 5 for the code and measurements, Fable 5
+for the writing. I ran the original and the recreation side by side, said what
+was wrong, and remembered things about the plugin it could not have known (the
+Anarchy button, the per-note randomisation, the internal clipping). It wrote
+the host, the analysis scripts, the JUCE code and the web build.
 
 The measurements in [FINDINGS.md](analysis/FINDINGS.md) are made by scripts in
 this repo against the real plugin. If you have a copy of SwarmSynth.dll you can
