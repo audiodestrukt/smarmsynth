@@ -1,0 +1,29 @@
+# The original plugin is third-party proprietary software (Anarchy Sound
+# Software, 2003). It is NOT redistributed here -- supply your own copy.
+SwarmSynth.dll
+SwarmSynth32.dll
+*.dll
+
+# Raw state chunks dumped out of the original plugin: its data, not ours.
+*.chunk
+
+# build output
+vsthost32.exe
+swarmrender
+juce/build/
+
+# measurement caches (regenerate with the scripts in analysis/)
+analysis/data/renders/
+analysis/data/ab/
+analysis/data/frames/
+analysis/data/chunks/
+analysis/data/sw/
+analysis/data/click/
+analysis/data/paint/
+analysis/data/*.npy
+
+# screenshots of the original plugin's GUI
+analysis/data/*.png
+
+__pycache__/
+*.pyc
