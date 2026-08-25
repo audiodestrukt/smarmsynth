@@ -268,6 +268,7 @@ headless, so a recreation can be A/B'd against the original per patch, per note.
 | `host.cpp`    | the host: loader, audioMaster, WinMM audio out, WinMM MIDI in, editor window, offline render, WAV writer |
 | `Makefile`    | cross-compile with `i686-w64-mingw32-g++`                      |
 | `run.sh`      | build-if-needed + `wine vsthost32.exe`                         |
+| `FEATURES.md` | running list of ideas and open questions                       |
 
 ## Build environment
 

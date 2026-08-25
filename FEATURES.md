@@ -1,0 +1,62 @@
+# Ideas and observations
+
+A running list. Nothing here is committed to — it is a place to park things
+noticed while playing, so they are not lost.
+
+## Ideas
+
+### An intentional distortion stage
+
+There is something distorting inside the original's signal path, upstream of
+the output. Noticed while playing: some factory patches are not especially
+loud yet still have an obvious clipped or bit-reduced character, which output
+clipping alone would not explain.
+
+This refines an earlier measurement rather than contradicting it. The benchmark
+recorded the original hitting exactly 1.000 on 18 of the 45 factory patches
+(`analysis/FINDINGS.md`), and that was read as the output clipping. An internal
+stage explains both that and the quiet-but-crunchy patches.
+
+**Not necessarily to emulate.** The interesting version is a deliberate
+distortion somewhere in the recreation's path, as its own feature, rather than
+a reproduction of whatever the original happens to do.
+
+Worth deciding before building:
+
+- Where it sits. Per-particle (each grain distorts on its own, so the swarm
+  smears differently) is a very different instrument from one stage on the
+  summed output.
+- What kind. Hard clip, soft saturation, and bit/sample-rate reduction all fit
+  the description but sound nothing alike — and the "bit reduced" reading
+  points at quantisation rather than clipping.
+- How it relates to the existing `Overdrive` parameter, which is already a
+  tanh waveshaper on the summed output.
+
+If it ever matters to pin down what the original is doing, the cheap test is to
+render a quiet factory patch and look for harmonic distortion or amplitude
+quantisation in a signal nowhere near full scale.
+
+## Open questions
+
+Carried over from the reverse-engineering work; see `analysis/FINDINGS.md` for
+detail.
+
+- **The attack transient.** The worst benchmark scores are all plucked or brassy
+  patches — Pizzicato 99.6 dB, Cheeky 95.8, Digi Tamba 82.6, Brass 80.5 —
+  against 6.6 dB for the best. Points at the attack and the high-resonance
+  grain, not the swarm.
+- **The motion law.** The pairwise attract/repel/proximity force law was never
+  recovered; the engine uses a boids-style stand-in. `Std. Dev.` *tightens* the
+  cloud as it rises, which is the opposite of what the name suggests, and is
+  the loose thread most likely to explain the rest.
+- **The formant ceiling.** At high Resonance and high notes the formant clamps
+  around 3.5–4 kHz instead of following `f0 * (1 + 46·Res³)`. Not characterised.
+
+## Smaller things
+
+- **Pitch coarse and fine** exist in the original's state chunk (`0x1c`, `0x20`)
+  but are not exposed as VST parameters, so that knob is inert in the
+  recreation. The recreation could expose them as its own parameters.
+- The 3D panel's **zoom and rotate sliders** are not implemented.
+- The original uses a chunky **pixel font**; the recreation uses the system
+  sans. Closest single change to the overall feel.
