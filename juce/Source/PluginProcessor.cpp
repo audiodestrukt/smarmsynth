@@ -74,6 +74,11 @@ void SwarmAudioProcessor::prepareToPlay (double sampleRate, int block)
 {
     sr = sampleRate;
     engine.prepare (sampleRate, block);
+    if (std::getenv ("SWARM_DEBUG") != nullptr)
+    {
+        std::printf ("[audio] %.0f Hz, %d frames\n", sampleRate, block);
+        std::fflush (stdout);
+    }
 }
 
 void SwarmAudioProcessor::pullSettings()

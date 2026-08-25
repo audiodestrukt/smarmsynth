@@ -144,6 +144,40 @@ stored in the chunk in **seconds**, not as normalised values -- the default
 patch holds 0.1 / 0.5 / 0.2 for controls that read 100 / 500 / 200 ms. Every
 imported patch would have had wrong envelope times.
 
+### Running the standalone
+
+```sh
+./run-standalone.sh
+```
+
+The Options dialog lists around sixty outputs because ALSA exposes every PCM on
+the system -- raw `hw:` devices, rate converters, the lot. Only a handful are
+useful. The launcher picks one for you and, more importantly, sets the rate and
+buffer: **left to itself JUCE opens at 8000 Hz with a 16-frame buffer**, which
+sounds wrong and glitches.
+
+If you would rather choose in the dialog, the entries worth picking are:
+
+| pick this | it is |
+|---|---|
+| `PulseAudio Sound Server` | routes through PipeWire to your normal output |
+| `Default ALSA Output (currently PipeWire Media Server)` | same, via ALSA's default |
+| `PipeWire Sound Server` | same, direct |
+
+Then set the sample rate to 44100 or 48000 and the buffer to 256 or 512. That
+choice persists, and `run-standalone.sh` leaves an existing setting alone.
+
+One trap worth recording: JUCE matches the saved device against the ALSA
+*description*, not the PCM id. Writing `pulse` into the settings matches nothing
+and it silently falls back to that 8000 Hz default. The name has to be
+`PulseAudio Sound Server` -- the description line `aplay -L` prints under the id.
+Override with `DEVICE="PipeWire Sound Server" RATE=44100 ./run-standalone.sh`.
+
+MIDI inputs are enabled in the same dialog and persist the same way.
+
+`SWARM_DEBUG=1` makes the plugin print the rate and buffer it was actually
+given, plus envelope edits -- which is how the 8000 Hz default was found.
+
 ### The loop
 
 `swarmrender` is the new engine behind the same command line as
