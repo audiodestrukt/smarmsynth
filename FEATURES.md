@@ -36,6 +36,32 @@ If it ever matters to pin down what the original is doing, the cheap test is to
 render a quiet factory patch and look for harmonic distortion or amplitude
 quantisation in a signal nowhere near full scale.
 
+### The 3D view's trails
+
+The particle trails do not look like the original's. **Deliberately parked** —
+the current view is fast enough, and a true 3D engine is not a direction worth
+taking for this variant. Recreating the original effect comes first; an
+enhanced version later is the place for that, if anywhere.
+
+Recorded so the reasons are not lost. Two separate differences, and they are
+not equally expensive:
+
+- **The trail itself is not a trail.** `SwarmView` draws a straight line from
+  the particle's position back along its *instantaneous velocity vector*, scaled
+  by a constant. The original's streaks look like an actual path through recent
+  positions. A short ring buffer of past positions per particle would be much
+  closer and costs nothing structurally — no 3D engine involved. This is the
+  cheap half.
+- **The projection is faked.** The box is drawn as a front and a back rectangle
+  with particle positions linearly interpolated between them by their Vol value,
+  rather than a real perspective divide. Straight-line motion through the box
+  therefore does not curve on screen the way true perspective would. This is the
+  half that would pull in real 3D.
+
+The axis assignment itself is believed right — Pitch vertical, Pan across, Vol
+into the screen, with Res as hue and Noise desaturating — since that came from
+reading the original's own axis labels and colour keys.
+
 ## Open questions
 
 Carried over from the reverse-engineering work; see `analysis/FINDINGS.md` for
