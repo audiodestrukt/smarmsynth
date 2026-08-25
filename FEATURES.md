@@ -67,6 +67,40 @@ The axis assignment itself is believed right — Pitch vertical, Pan across, Vol
 into the screen, with Res as hue and Noise desaturating — since that came from
 reading the original's own axis labels and colour keys.
 
+### A drone variant for entheoscillator
+
+A second instrument built on the same engine, tuned the opposite way: smooth
+rather than raw, for sound-healing style drones.
+
+The parts that make this one harsh are known and mostly separable, which is what
+makes the variant plausible rather than a rewrite:
+
+- The grain is **hard-gated** — a burst then silence, which is where the buzz
+  comes from. Widening the window toward a full-duty sine, or crossfading
+  overlapping grains, softens it without touching the swarm.
+- `Resonance` at 0 is already a pure sine, so the gentle end of the range exists.
+- The swarm is the good part and should stay: slow Speed with high Pan Var and
+  Res Var is exactly a drifting, breathing drone.
+- Long envelope times are already available (up to 10 s) and the factory patches
+  barely use them.
+
+Worth deciding whether it is a mode of this plugin or a separate build sharing
+the engine headers. Separate is probably cleaner — this one is committed to
+recreating the original, and a "smooth" switch would muddy that.
+
+### v2: one web UI for everything
+
+For a v2 the interface should be the web one, not two implementations.
+
+JUCE 8 supports WebView-based plugin UIs — `juce_WebControlRelays`,
+`WebSliderRelay`, and a TypeScript interop package, all present in the checkout.
+So the HTML editor in `web/` can be hosted *inside* the native plugin rather
+than duplicated by it. That turns the browser build from a fork into the single
+source of the interface, which also means the measured laws only need
+implementing once.
+
+The engine already needs no changes for this — it is shared literally today.
+
 ### Run it in a browser
 
 The engine is header-only C++ with no JUCE anywhere in the DSP —

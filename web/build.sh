@@ -37,13 +37,25 @@ echo "built dist/swarm.js ($(du -h dist/swarm.js | cut -f1)) + dist/swarm.wasm (
 #     through processorOptions; instantiating an already-compiled module
 #     synchronously is allowed at any size.
 
-# The factory patches are NOT copied here -- the page reads them straight out of
-# ../presets/original, so there is only one copy in the repository. All this
-# writes is the list, since a static server gives no directory index.
+# The factory patches are bundled into ONE file next to the wasm, rather than
+# copied in individually or read from ../presets. A single self-contained blob
+# in dist means the page works whatever directory the static server is rooted
+# at -- reading ../presets/original only worked if you served the repository
+# root, which is exactly the kind of trap that makes a demo look broken.
 if [ -d ../presets/original ]; then
   mkdir -p dist
-  ls ../presets/original/*.swarmpatch | while read -r f; do basename "$f"; done \
-    | python3 -c "import sys,json;print(json.dumps(sorted(l.strip() for l in sys.stdin)))" \
-    > dist/presets.json
-  echo "indexed $(python3 -c "import json;print(len(json.load(open('dist/presets.json'))))") patches"
+  python3 - <<'PYEOF'
+import glob, json, os
+files = sorted(glob.glob('../presets/original/*.swarmpatch'))
+index, blob, offset = [], bytearray(), 0
+for f in files:
+    data = open(f, 'rb').read()
+    index.append({'name': os.path.basename(f)[:-11].replace('_', ' '),
+                  'offset': offset, 'size': len(data)})
+    blob += data
+    offset += len(data)
+open('dist/patches.bin', 'wb').write(blob)
+json.dump(index, open('dist/patches.json', 'w'))
+print(f"bundled {len(index)} patches into dist/patches.bin ({len(blob)} bytes)")
+PYEOF
 fi

@@ -81,27 +81,39 @@ const send = (msg) => node && node.port.postMessage(msg);
 
 // ------------------------------------------------------------------ presets
 
-let presetNames = [];
+let patchIndex = [];
+let patchBlob = null;
 
 async function loadPresetList() {
-  try {
-    presetNames = await fetch('dist/presets.json').then((r) => r.json());
-  } catch { presetNames = []; }
   const sel = $('#preset');
-  sel.innerHTML = '<option value="">— factory patches —</option>';
-  for (const f of presetNames) {
-    const o = document.createElement('option');
-    o.value = f;
-    o.textContent = f.replace('.swarmpatch', '').replace(/_/g, ' ');
-    sel.appendChild(o);
+  try {
+    const [index, blob] = await Promise.all([
+      fetch('dist/patches.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+      fetch('dist/patches.bin').then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); }),
+    ]);
+    patchIndex = index;
+    patchBlob = blob;
+  } catch (e) {
+    // say so rather than leaving a dropdown that silently does nothing
+    setStatus('could not load the factory patches (' + e.message + ')', false);
+    patchIndex = []; patchBlob = null;
   }
+  sel.innerHTML = '<option value="">— factory patches —</option>';
+  patchIndex.forEach((p, i) => {
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = p.name;
+    sel.appendChild(o);
+  });
 }
 
-async function loadPreset(file) {
-  if (!file) return;
-  const buf = await fetch('../presets/original/' + file).then((r) => r.arrayBuffer());
-  send({ type: 'patch', bytes: new Uint8Array(buf) });
-  $('#patchname').textContent = file.replace('.swarmpatch', '').replace(/_/g, ' ');
+function loadPreset(which) {
+  if (which === '' || patchBlob === null) return;
+  const entry = patchIndex[Number(which)];
+  if (!entry) return;
+  const bytes = new Uint8Array(patchBlob, entry.offset, entry.size);
+  send({ type: 'patch', bytes: new Uint8Array(bytes) });   // copy, the blob is reused
+  $('#patchname').textContent = entry.name;
 }
 
 // ----------------------------------------------------------------- controls
@@ -334,7 +346,10 @@ buildKeyboard();
 drawView();
 
 $('#start').addEventListener('click', start);
-$('#preset').addEventListener('change', (e) => { start().then(() => loadPreset(e.target.value)); });
+$('#preset').addEventListener('change', (e) => {
+  const v = e.target.value;
+  start().then(() => loadPreset(v));
+});
 $('#anarchy').addEventListener('click', () => {
   start().then(() => {
     const seed = (Math.random() * 0xffffffff) >>> 0;
