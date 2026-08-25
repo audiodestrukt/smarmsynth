@@ -22,6 +22,11 @@ constexpr R kKeyboard   { 8, 466, 562,  62 };
 constexpr R kFilter     {576, 462,  96,  66 };   // LoPass, Q
 
 const char* kDimNames[5] = { "VOL", "PITCH", "PAN", "RES", "NOISE" };
+juce::String prettyName (int d)
+{
+    const juce::String n { kDimNames[d] };
+    return n.substring (0, 1) + n.substring (1).toLowerCase();
+}
 const char* kHomeCaps[5] = { "master", "coarse", "home", "home", "home" };
 
 // parameter ids, in the generated order
@@ -57,6 +62,9 @@ SwarmAudioProcessorEditor::SwarmAudioProcessorEditor (SwarmAudioProcessor& p)
         rangeKnobs[d] = std::make_unique<Knob> (proc.apvts, idFor (rangeIdx[d]),
                                                 "range", accent);
         rangeKnobs[d]->suffix = "%";
+
+        homeKnobs[d]->onSelect  = [this, d] { if (d != selectedDim) selectDimension (d); };
+        rangeKnobs[d]->onSelect = [this, d] { if (d != selectedDim) selectDimension (d); };
         addAndMakeVisible (*homeKnobs[d]);
         addAndMakeVisible (*rangeKnobs[d]);
 
@@ -76,7 +84,10 @@ SwarmAudioProcessorEditor::SwarmAudioProcessorEditor (SwarmAudioProcessor& p)
     speedEnv = std::make_unique<EnvelopeEditor> (proc.apvts,
         EnvelopeEditor::Ids { idFor (95), idFor (96), idFor (97), idFor (98),
                               idFor (99), idFor (100), idFor (94) },
-        "Speed Env", colours::text, true);
+        "Speed Env", colours::text, true,
+        [this] { return proc.envShapeFor (swarm::ESpeed); },
+        [this] (const swarm::EnvShape& sh)
+        { proc.setEnvPoints (swarm::ESpeed, swarm::serialisePoints (sh)); });
     addAndMakeVisible (*speedEnv);
 
     auto mk = [this] (std::unique_ptr<Knob>& k, int idx, const char* cap, juce::Colour c)
@@ -144,18 +155,20 @@ void SwarmAudioProcessorEditor::selectDimension (int d)
                               idFor (kValueEnvBase[d] + (d == 0 ? 4 : 5)),
                               idFor (kValueEnvBase[d] + (d == 0 ? 4 : 6)),
                               idFor (kValueEnvBase[d]) },
-        juce::String (kDimNames[d]).toLowerCase().substring (0, 1).toUpperCase()
-            + juce::String (kDimNames[d]).toLowerCase().substring (1) + " Env",
-        accent, d != 0);
+        prettyName (d) + " Env", accent, d != 0,
+        [this, d] { return proc.envShapeFor (d); },
+        [this, d] (const swarm::EnvShape& sh)
+        { proc.setEnvPoints (d, swarm::serialisePoints (sh)); });
 
     rangeEnv = std::make_unique<EnvelopeEditor> (proc.apvts,
         EnvelopeEditor::Ids { idFor (kRangeEnvBase[d] + 1), idFor (kRangeEnvBase[d] + 2),
                               idFor (kRangeEnvBase[d] + 3), idFor (kRangeEnvBase[d] + 4),
                               idFor (kRangeEnvBase[d] + 5), idFor (kRangeEnvBase[d] + 6),
                               idFor (kRangeEnvBase[d]) },
-        juce::String (kDimNames[d]).toLowerCase().substring (0, 1).toUpperCase()
-            + juce::String (kDimNames[d]).toLowerCase().substring (1) + " Range Env",
-        accent, true);
+        prettyName (d) + " Range Env", accent, true,
+        [this, d] { return proc.envShapeFor (swarm::EVolVar + d); },
+        [this, d] (const swarm::EnvShape& sh)
+        { proc.setEnvPoints (swarm::EVolVar + d, swarm::serialisePoints (sh)); });
 
     addAndMakeVisible (*valueEnv);
     addAndMakeVisible (*rangeEnv);

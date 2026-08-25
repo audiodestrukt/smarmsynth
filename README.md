@@ -86,6 +86,7 @@ plugin being driven by what it measures.
 ./run.sh --dump-chunk patch.chunk                        # its state, raw
 analysis/chunkdiff.sh                                    # map chunk offsets
 analysis/capture_swarm.sh --param 5=0.4 --param 9=0.6    # watch the swarm move
+analysis/gui_run.sh out/ "dclick:150,285; dump"          # script the original's editor
 python3 analysis/build_spec.py                           # regenerate the C++ spec
 ```
 
@@ -119,6 +120,16 @@ Working parts: the five parameter columns with their home and range knobs, the
 column selector, both envelope editors, the Speed envelope, all the motion and
 filter knobs, the on-screen keyboard, and the 3D swarm view driven by live
 particle positions from the engine.
+
+The envelope panels are real breakpoint editors, with the original's own verbs:
+double-click empty plot to add a point, drag a point to move it, right-click to
+delete. Clicking any knob in a column brings that dimension's envelope pair up,
+as the original does. Extra breakpoints live in the plugin state rather than the
+parameter list, which is the same split the original makes.
+
+`cmake --build build --target test_env && ./build/test_env` checks the envelope
+model headlessly -- insert, delete, length preservation and state round-trip --
+so that behaviour is verified without driving a GUI.
 
 Two things the original has that this does not yet: the zoom and rotate sliders
 on the 3D panel, and the pitch **fine** control. Pitch coarse and fine are worth

@@ -2,6 +2,12 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SwarmLookAndFeel.h"
 #include "SwarmEngine.h"
+#include "SwarmEnvModel.h"
+#include <functional>
+#include <vector>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
 #include "SwarmParams.h"
 
 namespace swarmui {
@@ -43,6 +49,7 @@ public:
 
     void mouseDown (const juce::MouseEvent&) override
     {
+        if (onSelect) onSelect();      // bring this control's envelopes up
         if (param) { param->beginChangeGesture(); dragStart = param->getValue(); }
     }
     void mouseDrag (const juce::MouseEvent& e) override
@@ -60,6 +67,9 @@ public:
 
     juce::String suffix;
     juce::String placeholder;
+    /** Called when the knob is touched, so the editor can switch the envelope
+        panels to the dimension this knob belongs to. */
+    std::function<void()> onSelect;
 
 private:
     juce::AudioProcessorValueTreeState& apvts;
@@ -71,144 +81,241 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-/** The breakpoint envelope editor. The original draws attack / decay / release
-    as three segments between draggable points, with the segment durations
-    written underneath as arrows. Times use the measured law
-    t_ms = 0.1 + 9999.9*v^2. */
+/** The breakpoint envelope editor.
+
+    Verbs match the original, which was established by scripting its editor and
+    diffing its state chunk after each interaction (analysis/env_probe):
+
+      double-click on empty plot .. add a breakpoint
+      drag a point ............... move it in time and level
+      right-click a point ........ delete it
+      single click ............... nothing
+
+    Times use the measured law t_ms = 0.1 + 9999.9*v^2. The first and last
+    points stay mirrored into the exposed parameters so host automation still
+    reaches them; any points in between are stored in the plugin state.
+*/
 class EnvelopeEditor : public juce::Component
 {
 public:
     struct Ids { juce::String atkT, atkL, decT, decL, relT, relL, ini; };
 
-    EnvelopeEditor (juce::AudioProcessorValueTreeState& s, Ids ids,
-                    juce::String caption, juce::Colour accent, bool hasIni)
-        : apvts (s), p (ids), title (caption), colour (accent), withIni (hasIni) {}
+    using GetShape = std::function<swarm::EnvShape()>;
+    using PutShape = std::function<void (const swarm::EnvShape&)>;
+
+    EnvelopeEditor (juce::AudioProcessorValueTreeState& s, Ids ids, juce::String caption,
+                    juce::Colour accent, bool hasIni, GetShape get, PutShape put)
+        : apvts (s), p (ids), title (caption), colour (accent), withIni (hasIni),
+          getShape (std::move (get)), putShape (std::move (put)) {}
 
     void paint (juce::Graphics& g) override
     {
         auto b = getLocalBounds().toFloat();
+        const float u = juce::jmax (0.35f, b.getHeight() / 66.0f);
 
-        const float u = b.getHeight() / 66.0f;      // the panel is ~66 base units tall
         g.setColour (colour);
         g.setFont (juce::FontOptions (juce::jmax (6.0f, 8.0f * u)));
         auto header = b.removeFromTop (11.0f * u);
         g.drawText (title, header.toNearestInt(), juce::Justification::topLeft, false);
-        g.setColour (colours::text.withAlpha (0.75f));
-        const float third = header.getWidth() / 3.0f;
-        g.drawText ("attack",  header.withX (header.getX() + third * 0.9f).toNearestInt(),
-                    juce::Justification::topLeft, false);
-        g.drawText ("decay",   header.withX (header.getX() + third * 1.75f).toNearestInt(),
-                    juce::Justification::topLeft, false);
-        g.drawText ("release", header.withX (header.getRight() - 44.0f * u).toNearestInt(),
-                    juce::Justification::topLeft, false);
 
         auto footer = b.removeFromBottom (11.0f * u);
-        auto plot   = b.reduced (2.0f);
+        auto plot   = b.reduced (2.0f * u);
 
         g.setColour (colours::envPaper);
         g.fillRect (plot);
         g.setColour (juce::Colours::black.withAlpha (0.55f));
-        g.drawRect (plot, 1.0f);
+        g.drawRect (plot, 1.0f * u);
 
-        // parameter values are normalised; real durations come from the
-        // measured law t_ms = 0.1 + 9999.9*v^2
-        const float a = swarm::envTimeMs (val (p.atkT));
-        const float d = swarm::envTimeMs (val (p.decT));
-        const float r = swarm::envTimeMs (val (p.relT));
-        const float total = juce::jmax (0.001f, a + d + r);
-        const float x0 = plot.getX();
-        const float xa = x0 + plot.getWidth() * (a / total);
-        const float xd = xa + plot.getWidth() * (d / total);
-        const float x1 = plot.getRight();
+        const auto sh = getShape();
+        const float total = juce::jmax (0.0001f, sh.totalPreReleaseSeconds() + sh.relT);
+        auto in = plot.reduced (0.0f, 1.5f * u);
 
-        // inset by a pixel so a full-scale level is not drawn on the border
-        auto yFor = [&] (float lvl)
-        {
-            auto in = plot.reduced (0.0f, 1.5f);
-            return in.getBottom() - in.getHeight() * juce::jlimit (0.0f, 1.0f, lvl);
-        };
-        const float y0 = yFor (withIni ? val (p.ini) : 0.0f);
-        const float ya = yFor (val (p.atkL));
-        const float yd = yFor (val (p.decL));
-        const float y1 = yFor (withIni ? val (p.relL) : 0.0f);
+        auto xAt = [&] (float secs) { return plot.getX() + plot.getWidth() * (secs / total); };
+        auto yAt = [&] (float lvl)  { return in.getBottom() - in.getHeight() * juce::jlimit (0.0f, 1.0f, lvl); };
 
+        // the polyline: initial level, every breakpoint, then the release
         juce::Path path;
-        path.startNewSubPath (x0, y0);
-        path.lineTo (xa, ya); path.lineTo (xd, yd); path.lineTo (x1, y1);
-        g.setColour (colours::envInk);
-        g.strokePath (path, juce::PathStrokeType (1.2f));
-
-        g.setColour (juce::Colours::black.withAlpha (0.45f));
-        for (float x : { xa, xd })
+        float acc = 0.0f;
+        path.startNewSubPath (xAt (0.0f), yAt (withIni ? sh.ini : 0.0f));
+        std::vector<juce::Point<float>> handles;
+        handles.push_back ({ xAt (0.0f), yAt (withIni ? sh.ini : 0.0f) });
+        for (int i = 0; i < sh.n; ++i)
         {
-            const float dash[] = { 2.0f, 2.0f };
-            juce::Path v; v.startNewSubPath (x, plot.getY()); v.lineTo (x, plot.getBottom());
-            juce::PathStrokeType (0.7f).createDashedStroke (v, v, dash, 2);
-            g.strokePath (v, juce::PathStrokeType (0.7f));
+            acc += sh.p[i].t;
+            const juce::Point<float> pt { xAt (acc), yAt (sh.p[i].l) };
+            path.lineTo (pt);
+            handles.push_back (pt);
         }
-        g.setColour (colours::envInk);
-        for (auto pt : { juce::Point<float> (x0, y0), { xa, ya }, { xd, yd }, { x1, y1 } })
-            g.fillRect (pt.x - 2.0f, pt.y - 2.0f, 4.0f, 4.0f);
+        const juce::Point<float> relEnd { xAt (acc + sh.relT), yAt (sh.relL) };
+        path.lineTo (relEnd);
 
-        // segment durations, as the original prints them
+        // segment dividers
+        g.setColour (juce::Colours::black.withAlpha (0.28f));
+        for (size_t i = 1; i + 1 <= (size_t) sh.n; ++i)
+            g.drawLine (handles[i].x, plot.getY(), handles[i].x, plot.getBottom(), 0.6f * u);
+
+        g.setColour (colours::envInk);
+        g.strokePath (path, juce::PathStrokeType (1.2f * u));
+
+        for (size_t i = 0; i < handles.size(); ++i)
+        {
+            const bool hot = ((int) i == hoverPoint + 1);
+            g.setColour (hot ? colour.brighter (0.3f) : colours::envInk);
+            const float r = (hot ? 3.4f : 2.4f) * u;
+            g.fillRect (handles[i].x - r, handles[i].y - r, r * 2, r * 2);
+        }
+        g.setColour (colours::envInk.withAlpha (0.6f));
+        const float rr = 2.4f * u;
+        g.fillRect (relEnd.x - rr, relEnd.y - rr, rr * 2, rr * 2);
+
+        // durations under each segment, as the original prints them
         g.setColour (colours::text.withAlpha (0.8f));
         g.setFont (juce::FontOptions (juce::jmax (6.0f, 7.5f * u)));
-        auto seg = [&] (float lo, float hi, float ms)
+        auto label = [&] (float x0, float x1, float secs)
         {
-            juce::Rectangle<float> box (lo, footer.getY(), hi - lo, footer.getHeight());
-            const juce::String s = ms < 1000.0f ? juce::String (juce::roundToInt (ms)) + "ms"
-                                                : juce::String (ms * 0.001f, 2) + "s";
-            g.drawText ("<-" + s + "->", box.toNearestInt(), juce::Justification::centred, false);
+            if (x1 - x0 < 16.0f) return;
+            const juce::String t = secs < 1.0f ? juce::String (juce::roundToInt (secs * 1000.0f)) + "ms"
+                                               : juce::String (secs, 2) + "s";
+            g.drawText ("<-" + t + "->",
+                        juce::Rectangle<float> (x0, footer.getY(), x1 - x0, footer.getHeight()).toNearestInt(),
+                        juce::Justification::centred, false);
         };
-        seg (x0, xa, a); seg (xa, xd, d); seg (xd, x1, r);
+        for (size_t i = 0; i + 1 < handles.size(); ++i)
+            label (handles[i].x, handles[i + 1].x, sh.p[i].t);
+        label (handles.back().x, relEnd.x, sh.relT);
     }
+
+    void mouseMove (const juce::MouseEvent& e) override
+    {
+        const int h = hitTest (e.position);
+        if (h != hoverPoint) { hoverPoint = h; repaint(); }
+    }
+    void mouseExit (const juce::MouseEvent&) override { hoverPoint = -1; repaint(); }
 
     void mouseDown (const juce::MouseEvent& e) override
     {
-        auto b = plotArea();
-        const float fx = juce::jlimit (0.0f, 1.0f,
-                                       (e.position.x - b.getX()) / juce::jmax (1.0f, b.getWidth()));
-        seg = fx < 0.34f ? 0 : (fx < 0.67f ? 1 : 2);
-        timeAtDown  = val (segTime());
-        levelAtDown = val (segLevel());
+        dragPoint = hitTest (e.position);
+        trace ("mouseDown hit=%d popup=%d at %.0f,%.0f", dragPoint,
+               (int) e.mods.isPopupMenu(), e.position.x, e.position.y);
+        if (e.mods.isPopupMenu())
+        {
+            // right-click on a point deletes it
+            auto sh = getShape();
+            if (dragPoint >= 0 && swarm::removePoint (sh, dragPoint)) { commit (sh); dragPoint = -1; }
+            return;
+        }
+        if (dragPoint >= 0) shapeAtDown = getShape();
+    }
+
+    void mouseDoubleClick (const juce::MouseEvent& e) override
+    {
+        trace ("doubleClick hit=%d", hitTest (e.position));
+        if (hitTest (e.position) >= 0) return;      // only empty area adds
+        auto sh = getShape();
+        const float total = juce::jmax (0.0001f, sh.totalPreReleaseSeconds() + sh.relT);
+        const float pre   = sh.totalPreReleaseSeconds();
+        auto plot = plotArea();
+        const float secs = (e.position.x - plot.getX()) / juce::jmax (1.0f, plot.getWidth()) * total;
+        if (secs >= pre) return;                    // the release segment is not divisible
+        const float frac = pre > 0.0f ? secs / pre : 0.0f;
+        const float lvl  = 1.0f - (e.position.y - plot.getY()) / juce::jmax (1.0f, plot.getHeight());
+        if (swarm::insertPoint (sh, frac, lvl)) commit (sh);
     }
 
     void mouseDrag (const juce::MouseEvent& e) override
     {
-        // horizontal drag stretches the segment, vertical sets its end level
-        setVal (segTime(),  timeAtDown  + (float) e.getDistanceFromDragStartX() / 220.0f);
-        setVal (segLevel(), levelAtDown - (float) e.getDistanceFromDragStartY() / 120.0f);
-        repaint();
+        trace ("mouseDrag point=%d dx=%d dy=%d", dragPoint,
+               e.getDistanceFromDragStartX(), e.getDistanceFromDragStartY());
+        if (dragPoint < 0) return;
+        auto sh = shapeAtDown;
+        auto plot = plotArea();
+        const float total = juce::jmax (0.0001f, sh.totalPreReleaseSeconds() + sh.relT);
+        const float dSecs = (float) e.getDistanceFromDragStartX() / juce::jmax (1.0f, plot.getWidth()) * total;
+
+        // horizontal: lengthen this segment, shorten the next, so the points
+        // after it stay where they are
+        const float newT = juce::jlimit (0.0005f, 10.0f, sh.p[dragPoint].t + dSecs);
+        const float used = newT - sh.p[dragPoint].t;
+        sh.p[dragPoint].t = newT;
+        if (dragPoint + 1 < sh.n)
+            sh.p[dragPoint + 1].t = juce::jlimit (0.0005f, 10.0f, sh.p[dragPoint + 1].t - used);
+
+        sh.p[dragPoint].l = juce::jlimit (0.0f, 1.0f,
+            shapeAtDown.p[dragPoint].l - (float) e.getDistanceFromDragStartY() / juce::jmax (1.0f, plot.getHeight()));
+
+        commit (sh);
     }
+
+    void mouseUp (const juce::MouseEvent&) override { dragPoint = -1; }
 
 private:
-    float val (const juce::String& id) const
+    static void trace (const char* fmt, ...)
     {
-        auto* pr = apvts.getParameter (id);
-        return pr != nullptr ? pr->getValue() : 0.0f;
+        if (std::getenv ("SWARM_DEBUG") == nullptr) return;
+        va_list a; va_start (a, fmt);
+        std::vfprintf (stdout, fmt, a); std::fputc ('\n', stdout); std::fflush (stdout);
+        va_end (a);
     }
-    void setVal (const juce::String& id, float v)
-    {
-        if (auto* pr = apvts.getParameter (id)) pr->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, v));
-    }
+
     juce::Rectangle<float> plotArea() const
     {
-        auto b = getLocalBounds().toFloat().reduced (2.0f);
-        const float u = b.getHeight() / 66.0f;
+        auto b = getLocalBounds().toFloat();
+        const float u = juce::jmax (0.35f, b.getHeight() / 66.0f);
         b.removeFromTop (11.0f * u); b.removeFromBottom (11.0f * u);
-        return b;
+        return b.reduced (2.0f * u);
     }
-    const juce::String& segTime()  const { return seg == 0 ? p.atkT : (seg == 1 ? p.decT : p.relT); }
-    const juce::String& segLevel() const { return seg == 0 ? p.atkL : (seg == 1 ? p.decL : p.relL); }
 
-    int   seg = 0;
-    float timeAtDown = 0.0f, levelAtDown = 0.0f;
+    /** The component's local coordinates are physical pixels, so every drawn
+        size and every hit target has to scale with the editor. Without this the
+        handles are a couple of pixels wide and dragging one is impossible. */
+    float unitScale() const { return juce::jmax (0.35f, getHeight() / 66.0f); }
+
+    /** Index of the breakpoint under the mouse, or -1. */
+    int hitTest (juce::Point<float> pos) const
+    {
+        const auto sh = getShape();
+        auto plot = plotArea();
+        const float total = juce::jmax (0.0001f, sh.totalPreReleaseSeconds() + sh.relT);
+        auto in = plot.reduced (0.0f, 1.5f * unitScale());
+        const float grab = 7.0f * unitScale();
+        float acc = 0.0f;
+        int best = -1; float bestD = grab;
+        for (int i = 0; i < sh.n; ++i)
+        {
+            acc += sh.p[i].t;
+            const juce::Point<float> pt { plot.getX() + plot.getWidth() * (acc / total),
+                                          in.getBottom() - in.getHeight() * sh.p[i].l };
+            const float d = pos.getDistanceFrom (pt);
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        return best;
+    }
+
+    /** Writes the shape back: first and last points mirror into the exposed
+        parameters, the whole list into the state tree. */
+    void commit (const swarm::EnvShape& sh)
+    {
+        auto set = [this] (const juce::String& id, float v)
+        {
+            if (auto* pr = apvts.getParameter (id)) pr->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, v));
+        };
+        set (p.atkT, swarm::envTimeNorm (sh.p[0].t * 1000.0f));
+        set (p.atkL, sh.p[0].l);
+        const int last = sh.n - 1;
+        if (last > 0) { set (p.decT, swarm::envTimeNorm (sh.p[last].t * 1000.0f)); set (p.decL, sh.p[last].l); }
+        putShape (sh);
+        repaint();
+    }
 
     juce::AudioProcessorValueTreeState& apvts;
     Ids p;
     juce::String title;
     juce::Colour colour;
     bool withIni;
+    GetShape getShape;
+    PutShape putShape;
+    swarm::EnvShape shapeAtDown;
+    int dragPoint = -1, hoverPoint = -1;
 };
 
 // ---------------------------------------------------------------------------

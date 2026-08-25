@@ -1,6 +1,8 @@
 #include "PluginProcessor.h"
 #include "SwarmPreset.h"
 #include "SwarmDefaults.h"
+#include <cstdio>
+#include <cstdlib>
 
 using namespace swarm;
 
@@ -115,7 +117,8 @@ void SwarmAudioProcessor::pullSettings()
     // the other ten do. Base indices follow the original's parameter order.
     auto ms = [] (float v) { return envTimeMs (v) * 0.001f; };
 
-    s.env[EVol] = { 0.0f, ms (raw (22)), raw (23), ms (raw (24)), raw (25), ms (raw (26)), 0.0f };
+    s.env[EVol] = makeShape (0.0f, ms (raw (22)), raw (23),
+                             ms (raw (24)), raw (25), ms (raw (26)), 0.0f);
 
     const int base[10] = { 28, 36, 44, 52, 59, 66, 73, 80, 87, 94 };
     const int slot[10] = { EPitch, EPan, ERes, ENoise,
@@ -123,14 +126,19 @@ void SwarmAudioProcessor::pullSettings()
     for (int b = 0; b < 10; ++b)
     {
         const int i = base[b];
-        s.env[slot[b]] = { raw (i),          // Ini Lv
-                           ms (raw (i + 1)), // Atk Tm
-                           raw (i + 2),      // Atk Lv
-                           ms (raw (i + 3)), // Dec Tm
-                           raw (i + 4),      // Dec Lv
-                           ms (raw (i + 5)), // Rel Tm
-                           raw (i + 6) };    // Rel Lv
+        s.env[slot[b]] = makeShape (raw (i),           // Ini Lv
+                                    ms (raw (i + 1)),  // Atk Tm
+                                    raw (i + 2),       // Atk Lv
+                                    ms (raw (i + 3)),  // Dec Tm
+                                    raw (i + 4),       // Dec Lv
+                                    ms (raw (i + 5)),  // Rel Tm
+                                    raw (i + 6));      // Rel Lv
     }
+
+    // extra breakpoints, if the editor has added any, override the two-point
+    // shape the parameters describe (release always comes from the parameters)
+    for (int e = 0; e < NumEnvs; ++e)
+        deserialisePoints (envPointsFor (e).toStdString(), s.env[e]);
 
     engine.setSettings (s);
 }
@@ -172,6 +180,32 @@ void SwarmAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         }
     }
     if (pos < n) engine.process (L + pos, R + pos, n - pos);
+}
+
+juce::String SwarmAudioProcessor::envPointsFor (int slot) const
+{
+    return apvts.state.getProperty (envPointsId (slot), juce::String()).toString();
+}
+
+void SwarmAudioProcessor::setEnvPoints (int slot, const juce::String& text)
+{
+    apvts.state.setProperty (envPointsId (slot), text, nullptr);
+    if (std::getenv ("SWARM_DEBUG") != nullptr)
+        std::printf ("[env %d] %s\n", slot, text.toRawUTF8());
+}
+
+swarm::EnvShape SwarmAudioProcessor::envShapeFor (int slot) const
+{
+    // the parameter-described shape, then any stored breakpoints on top
+    static const int base[NumEnvs] = { 22, 28, 36, 44, 52, 59, 66, 73, 80, 87, 94 };
+    auto ms = [] (float v) { return envTimeMs (v) * 0.001f; };
+    const int i = base[slot];
+    swarm::EnvShape sh = slot == EVol
+        ? makeShape (0.0f, ms (raw (22)), raw (23), ms (raw (24)), raw (25), ms (raw (26)), 0.0f)
+        : makeShape (raw (i), ms (raw (i + 1)), raw (i + 2), ms (raw (i + 3)),
+                     raw (i + 4), ms (raw (i + 5)), raw (i + 6));
+    deserialisePoints (envPointsFor (slot).toStdString(), sh);
+    return sh;
 }
 
 bool SwarmAudioProcessor::loadOriginalPreset (const juce::File& f)

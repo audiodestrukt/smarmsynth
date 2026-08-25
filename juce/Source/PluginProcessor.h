@@ -34,6 +34,14 @@ public:
     /** Loads an original SwarmSynth patch (raw chunk or .fxp). */
     bool loadOriginalPreset (const juce::File&);
 
+    /** Extra envelope breakpoints live in the state tree, not as parameters --
+        the original keeps them out of its parameter list too. */
+    static juce::Identifier envPointsId (int slot)
+    { return juce::Identifier ("envPoints" + juce::String (slot)); }
+    juce::String     envPointsFor (int slot) const;
+    void             setEnvPoints (int slot, const juce::String& text);
+    swarm::EnvShape  envShapeFor  (int slot) const;
+
     /** The editor's 3D view reads particle positions straight off the engine. */
     const swarm::SwarmEngine& getEngine() const { return engine; }
     juce::MidiKeyboardState&  getKeyboardState()  { return keyboardState; }

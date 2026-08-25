@@ -34,3 +34,8 @@ target_link_libraries(SwarmSynthJUCE PRIVATE
     PUBLIC
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags)
+
+# Headless checks for the envelope model (no JUCE, no GUI):
+#   cmake --build build --target test_env && ./build/test_env
+add_executable(test_env tools/test_env.cpp)
+target_include_directories(test_env PRIVATE Source)

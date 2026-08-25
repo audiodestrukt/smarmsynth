@@ -40,15 +40,16 @@ static SwarmSettings buildSettings()
     s.seed = (uint32_t) (r (21) * 134217728.0f);
     s.envRange[DPitch] = r (27) * 24.0f; s.envRange[DPan] = r (35);
     s.envRange[DRes] = r (43) * 0.5f;    s.envRange[DNoise] = r (51) * 0.5f;
-    s.env[EVol] = { 0.0f, ms (r (22)), r (23), ms (r (24)), r (25), ms (r (26)), 0.0f };
+    s.env[EVol] = makeShape (0.0f, ms (r (22)), r (23),
+                             ms (r (24)), r (25), ms (r (26)), 0.0f);
     const int base[10] = { 28, 36, 44, 52, 59, 66, 73, 80, 87, 94 };
     const int slot[10] = { EPitch, EPan, ERes, ENoise, EVolVar, EPitchVar,
                            EPanVar, EResVar, ENoiseVar, ESpeed };
     for (int b = 0; b < 10; ++b)
     {
         const int i = base[b];
-        s.env[slot[b]] = { r (i), ms (r (i+1)), r (i+2), ms (r (i+3)),
-                           r (i+4), ms (r (i+5)), r (i+6) };
+        s.env[slot[b]] = makeShape (r (i), ms (r (i+1)), r (i+2), ms (r (i+3)),
+                                    r (i+4), ms (r (i+5)), r (i+6));
     }
     return s;
 }

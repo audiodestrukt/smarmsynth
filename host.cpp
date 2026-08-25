@@ -682,10 +682,100 @@ static int renderToFile(const RenderOpts& o) {
 }
 
 // ---------------------------------------------------------------------------
+// GUI scripting
+//
+// Driving the plugin's editor through X (xdotool -> Wine -> Win32) turned out
+// to be unreliable: some clicks land, some do not. Posting the mouse messages
+// straight to the child window under the point is deterministic, and lets a
+// script be written in the editor's own pixel coordinates.
+//
+//   --gui-script "click:200,290; drag:120,300,120,260; wait:400; dump"
+// ---------------------------------------------------------------------------
+
+static char   g_dumpPrefix[256] = "";
+static int    g_dumpSeq = 0;
+static std::vector<std::string> g_guiSteps;
+static size_t g_guiPos = 0;
+
+// SendMessage rather than PostMessage: the plugin then handles each event
+// before the next is sent, which is what makes click timing meaningful.
+static void postMouse(int x, int y, UINT msg, WPARAM extraButtons) {
+    POINT pt = { x, y };
+    ClientToScreen(g_mainWnd, &pt);
+    HWND target = WindowFromPoint(pt);
+    if (!target) target = g_mainWnd;
+    POINT local = pt;
+    ScreenToClient(target, &local);
+    SendMessage(target, msg, extraButtons, MAKELPARAM(local.x, local.y));
+}
+
+static void guiClick(int x, int y, bool right) {
+    postMouse(x, y, WM_MOUSEMOVE, 0);
+    postMouse(x, y, right ? WM_RBUTTONDOWN : WM_LBUTTONDOWN, right ? MK_RBUTTON : MK_LBUTTON);
+    postMouse(x, y, right ? WM_RBUTTONUP   : WM_LBUTTONUP,   0);
+}
+
+static void guiDrag(int x0, int y0, int x1, int y1) {
+    postMouse(x0, y0, WM_MOUSEMOVE, 0);
+    postMouse(x0, y0, WM_LBUTTONDOWN, MK_LBUTTON);
+    const int steps = 12;
+    for (int i = 1; i <= steps; i++)
+        postMouse(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps,
+                  WM_MOUSEMOVE, MK_LBUTTON);
+    postMouse(x1, y1, WM_LBUTTONUP, 0);
+}
+
+static void dumpLiveChunk() {
+    char path[512];
+    sprintf(path, "%s%d.chunk", g_dumpPrefix[0] ? g_dumpPrefix : "live", g_dumpSeq++);
+    void* data = NULL;
+    VstIntPtr n = dispatchLocked(effGetChunk, 1, 0, &data);
+    if (n > 0 && data) {
+        FILE* f = fopen(path, "wb");
+        if (f) { fwrite(data, 1, (size_t)n, f); fclose(f);
+                 printf("   dumped %s (%ld bytes)\n", path, (long)n); }
+    } else printf("   effGetChunk returned %ld\n", (long)n);
+}
+
+// Runs one step per timer tick so the plugin gets to process messages between.
+static bool guiScriptStep() {
+    if (g_guiPos >= g_guiSteps.size()) return false;
+    std::string s = g_guiSteps[g_guiPos++];
+    int a, b, c, d;
+    if      (sscanf(s.c_str(), "click:%d,%d", &a, &b) == 2)          guiClick(a, b, false);
+    else if (sscanf(s.c_str(), "rclick:%d,%d", &a, &b) == 2)         guiClick(a, b, true);
+    else if (sscanf(s.c_str(), "dclick:%d,%d", &a, &b) == 2) {
+        // two clicks inside the system double-click time, with a real gap
+        guiClick(a, b, false); Sleep(60); guiClick(a, b, false);
+    }
+    else if (sscanf(s.c_str(), "drag:%d,%d,%d,%d", &a, &b, &c, &d) == 4) guiDrag(a, b, c, d);
+    else if (s == "dump")                                            dumpLiveChunk();
+    else if (s.rfind("wait", 0) == 0)                                { /* a tick is the wait */ }
+    else printf("   ?? gui step '%s'\n", s.c_str());
+    printf("   gui step %d/%d: %s\n", (int)g_guiPos, (int)g_guiSteps.size(), s.c_str());
+    return true;
+}
+
+static void parseGuiScript(const char* text) {
+    std::string cur;
+    for (const char* p = text; ; p++) {
+        if (*p == ';' || *p == 0) {
+            std::string t;
+            for (char ch : cur) if (!isspace((unsigned char)ch)) t += ch;
+            if (!t.empty()) g_guiSteps.push_back(t);
+            cur.clear();
+            if (*p == 0) break;
+        } else cur += *p;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // GUI
 // ---------------------------------------------------------------------------
 
 static bool g_pokePending = false;
+static int  g_guiTicks = 0;
+static bool g_guiQuitAtEnd = false;
 static int  g_pokeTicks   = 0;
 static int  g_octave = 4;
 static bool g_keyHeld[256] = { false };
@@ -716,6 +806,7 @@ static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         if (wp == VK_UP)   { if (g_octave < 8) g_octave++; printf("   octave %d\n", g_octave); return 0; }
         if (wp == VK_DOWN) { if (g_octave > 0) g_octave--; printf("   octave %d\n", g_octave); return 0; }
         if (wp == VK_SPACE) { allNotesOff(); printf("   all notes off\n"); return 0; }
+        if (wp == VK_F2) { dumpLiveChunk(); return 0; }
         int rel = keyToNote(wp);
         if (rel >= 0) {
             int note = g_octave * 12 + rel;
@@ -813,6 +904,11 @@ static int runGui(const char* title) {
                              RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
                 dispatch(effEditIdle);
             }
+            if (!g_pokePending && !g_guiSteps.empty()) {
+                if (++g_guiTicks % 12 == 0) {
+                    if (!guiScriptStep() && g_guiQuitAtEnd) PostMessage(g_mainWnd, WM_CLOSE, 0, 0);
+                }
+            }
             dispatch(53 /*effIdle, deprecated but some old plugins want it*/);
             if (g_wantResize) {
                 g_wantResize = false;
@@ -841,6 +937,11 @@ static void usage() {
     "  --map-params <steps>   sweep every param 0..1 and print a CSV of what\n"
     "                         each normalised value displays as, then exit\n"
     "  --dump-chunk <file>    write the plugin's opaque program chunk to a file\n"
+    "  --dump-prefix <p>      in the GUI, F2 dumps the live chunk to <p><n>.chunk\n"
+    "  --gui-script <steps>   drive the editor: semicolon-separated\n"
+    "                         click:x,y rclick:x,y dclick:x,y drag:x0,y0,x1,y1\n"
+    "                         wait dump -- coordinates are editor pixels\n"
+    "  --gui-quit             close once the script finishes\n"
     "  --dump-bank <file>     write the plugin's opaque bank chunk to a file\n"
     "  --midi <n>             open only MIDI input device n (default: all)\n"
     "  --no-midi              do not open any MIDI input\n"
@@ -882,6 +983,9 @@ int main(int argc, char** argv) {
         else if (a == "--midi"    && nx) midiDev = atoi(argv[++i]);
         else if (a == "--map-params" && nx) mapSteps = atoi(argv[++i]);
         else if (a == "--dump-chunk" && nx) { chunkOut = argv[++i]; chunkIsPreset = true; }
+        else if (a == "--dump-prefix" && nx) { strncpy(g_dumpPrefix, argv[++i], sizeof(g_dumpPrefix)-1); }
+        else if (a == "--gui-script"  && nx) { parseGuiScript(argv[++i]); }
+        else if (a == "--gui-quit")          { g_guiQuitAtEnd = true; }
         else if (a == "--dump-bank"  && nx) { chunkOut = argv[++i]; chunkIsPreset = false; }
         else if (a == "--program" && nx) program = atoi(argv[++i]);
         else if (a == "--fxp"     && nx) fxp = argv[++i];

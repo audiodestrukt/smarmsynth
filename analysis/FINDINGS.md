@@ -122,6 +122,34 @@ with the original's own readout.
 This is enough to **load original patches into the recreation**, which
 `juce/Source/SwarmPreset.h` does.
 
+## Envelopes are breakpoint lists, not ADSRs
+
+The state chunk gives each of the eleven envelopes a 108-byte record holding a
+**count** plus parallel time and level arrays, with room for about ten points.
+Only the first and last segment appear in the VST parameter list, so the extra
+breakpoints are GUI-and-preset state, not automatable parameters.
+
+The editor's verbs were established by scripting the original's own editor
+(`analysis/gui_run.sh`, which posts mouse messages straight to the plugin
+window) and dumping the state chunk after each interaction:
+
+| action | effect |
+|---|---|
+| single click | nothing |
+| **double-click on empty plot** | adds a breakpoint |
+| **drag a point** | moves it in time and level |
+| **right-click a point** | deletes it |
+
+A point's level is exactly the vertical fraction of the plot: clicking at 0.829
+of the height stored 0.8333, at 0.512 stored 0.5238 — a pixel's worth of
+difference. The stored time is a fraction that reaches 1.0 around 40% of the
+way across the plot, and inserts past that point are refused, so the editable
+span is not simply the whole width. That constant is not pinned down.
+
+Deleting a point folds its duration into the neighbouring segment, so the
+envelope keeps its overall length. Adding one splits the segment it landed in,
+again preserving total length.
+
 ## The motion law — the weak spot
 
 What is measured:

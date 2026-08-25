@@ -27,6 +27,8 @@
 #include <algorithm>
 #include <atomic>
 
+#include "SwarmEnvModel.h"
+
 namespace swarm {
 
 enum Dim { DVol = 0, DPitch, DPan, DRes, DNoise, NumDims };
@@ -47,54 +49,50 @@ struct Rng {
 };
 
 // ---------------------------------------------------------------------------
-// One of the eleven envelopes. MEASURED: every time control maps as
+// One of the eleven envelopes: a piecewise-linear run through its breakpoints,
+// a hold at the last one, then a release. MEASURED: every time control maps as
 //   t_ms = 0.1 + 9999.9 * v^2   (fit residual < 0.005 ms across the range)
-// Levels are raw floats 0..1. The volume envelope starts at 0 and releases to
-// 0; the other ten expose an initial level and a release level as well.
+// See SwarmEnvModel.h for why this is a breakpoint list and not a fixed ADSR.
 // ---------------------------------------------------------------------------
-struct EnvParams {
-    float ini = 0.0f, atkT = 0.001f, atkL = 1.0f,
-          decT = 0.5f, decL = 1.0f, relT = 0.2f, relL = 0.0f;
-};
-
 class Env {
 public:
     void  setSampleRate (double sr) { srate = sr > 0 ? sr : 44100.0; }
-    void  configure (const EnvParams& p) { ep = p; }
+    void  configure (const EnvShape& s) { shape = s; }
 
-    void  noteOn()  { stage = Attack;  level = ep.ini; pos = 0.0; }
-    void  noteOff() { stage = Release; from = level;   pos = 0.0; }
+    void  noteOn()  { stage = Run;     idx = 0; level = shape.ini; pos = 0.0; }
+    void  noteOff() { stage = Release; from = level;               pos = 0.0; }
     bool  isActive() const { return stage != Idle; }
     float current()  const { return level; }
 
     float tick()
     {
-        switch (stage)
+        if (stage == Idle) return level;
+
+        if (stage == Release)
         {
-            case Attack:  level = seg (ep.ini,  ep.atkL, ep.atkT, Decay);   break;
-            case Decay:   level = seg (ep.atkL, ep.decL, ep.decT, Sustain); break;
-            case Sustain: level = ep.decL;                                  break;
-            case Release: level = seg (from,    ep.relL, ep.relT, Idle);    break;
-            case Idle:    break;
+            const double n = std::max (1.0, (double) shape.relT * srate);
+            if (++pos >= n) { stage = Idle; level = shape.relL; }
+            else            level = from + (shape.relL - from) * (float) (pos / n);
+            return level;
         }
+
+        // running through the breakpoints, then holding at the last one
+        if (idx >= shape.n) return level;
+
+        const float a = (idx == 0) ? shape.ini : shape.p[idx - 1].l;
+        const double n = std::max (1.0, (double) shape.p[idx].t * srate);
+        if (++pos >= n) { level = shape.p[idx].l; ++idx; pos = 0.0; }
+        else            level = a + (shape.p[idx].l - a) * (float) (pos / n);
         return level;
     }
 
 private:
-    enum Stage { Idle, Attack, Decay, Sustain, Release };
-
-    float seg (float a, float b, float timeSec, Stage nextStage)
-    {
-        const double n = std::max (1.0, timeSec * srate);
-        pos += 1.0;
-        if (pos >= n) { stage = nextStage; if (stage == Idle) return 0.0f; pos = 0.0; return b; }
-        return a + (b - a) * (float) (pos / n);
-    }
-
-    EnvParams ep;
-    Stage  stage = Idle;
-    double srate = 44100.0, pos = 0.0;
-    float  level = 0.0f, from = 0.0f;
+    enum Stage { Idle, Run, Release };
+    EnvShape shape;
+    Stage    stage = Idle;
+    double   srate = 44100.0, pos = 0.0;
+    int      idx = 0;
+    float    level = 0.0f, from = 0.0f;
 };
 
 // ---------------------------------------------------------------------------
@@ -124,7 +122,7 @@ struct SwarmSettings {
     float portamento = 0.02f;  // seconds
     uint32_t seed    = 12346;
 
-    EnvParams env[11];         // vol, pitch, pan, res, noise, then their five
+    EnvShape env[11];          // vol, pitch, pan, res, noise, then their five
                                // variance envelopes, then speed
     float envRange[NumDims] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };  // Pt/Pn/Rs/Ns Env Rg
 };

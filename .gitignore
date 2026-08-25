@@ -22,8 +22,15 @@ analysis/data/click/
 analysis/data/paint/
 analysis/data/*.npy
 
-# screenshots of the original plugin's GUI
+# screenshots and probe output (regenerate with the scripts in analysis/)
 analysis/data/*.png
+analysis/data/env/
+analysis/data/newenv/
+analysis/data/clicktest/
+analysis/data/g[0-9]*/
+analysis/data/gx*/
+analysis/data/sw/
+**/*.chunk
 
 __pycache__/
 *.pyc
